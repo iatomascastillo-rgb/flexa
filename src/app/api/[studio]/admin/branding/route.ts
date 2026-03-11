@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { put } from '@vercel/blob'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
@@ -45,6 +44,10 @@ export async function PATCH(
       if (logoFile.size > 2 * 1024 * 1024) {
         return NextResponse.json({ error: 'El logo no puede superar 2 MB' }, { status: 422 })
       }
+      if (!process.env.BLOB_READ_WRITE_TOKEN) {
+        return NextResponse.json({ error: 'Upload de logo no configurado' }, { status: 503 })
+      }
+      const { put } = await import('@vercel/blob')
       const blob = await put(`logos/${studioId}/${logoFile.name}`, logoFile, {
         access: 'public',
         addRandomSuffix: true,

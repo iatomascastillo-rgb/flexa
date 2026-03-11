@@ -41,13 +41,13 @@ export default async function AdminDashboardPage({
   const tab = sp.tab === 'mensual' ? 'mensual' : 'dia'
 
   const session = await auth()
-  if (!session?.user?.id) redirect('/login')
+  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/admin`)
   if (session.user.role === 'SUPER_ADMIN') redirect('/superadmin')
   if (session.user.role !== 'STUDIO_ADMIN') redirect(`/${studio}`)
 
   const tenant = await getTenantBySlug(studio)
   if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
+  if (session.user.studioId !== tenant.studioId) redirect(`/login?callbackUrl=/${studio}/admin`)
 
   const studioId = tenant.studioId
   const todayStart = todayARStart()

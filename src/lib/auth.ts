@@ -66,11 +66,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // user solo existe en el primer sign-in
         token.role = (user as { role: Role }).role
         token.studioId = (user as { studioId: string }).studioId
+        token.id = (user as { id: string }).id
       }
       return token
     },
 
     async session({ session, token }) {
+      // Si el token no tiene los campos requeridos (JWT legacy/corrupto), ignorar
+      if (!token.role || !token.studioId) return session
       session.user.id = token.sub!
       session.user.role = token.role as Role
       session.user.studioId = token.studioId as string

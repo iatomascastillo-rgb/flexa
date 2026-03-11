@@ -6,6 +6,7 @@ import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
 import { createBooking, cancelBooking } from '@/services/booking.service'
 import { AppError } from '@/types/errors'
+import { SessionCard } from './SessionCard'
 
 // ── Server Actions ─────────────────────────────────────────────────────────────
 
@@ -37,8 +38,7 @@ async function bookClassAction(formData: FormData) {
   }
 
   if (errorCode) redirect(`/${studio}/clases?error=${errorCode}`)
-  revalidatePath(`/${studio}/clases`)
-  revalidatePath(`/${studio}`)
+  redirect(`/${studio}/clases?success=booked`)
 }
 
 async function cancelClassAction(formData: FormData) {
@@ -65,8 +65,7 @@ async function cancelClassAction(formData: FormData) {
     }
   }
 
-  revalidatePath(`/${studio}/clases`)
-  revalidatePath(`/${studio}`)
+  redirect(`/${studio}/clases?success=cancelled`)
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -114,6 +113,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   CANCELLATION_WINDOW_CLOSED: 'El período de cancelación ya cerró.',
 }
 
+const SUCCESS_MESSAGES: Record<string, string> = {
+  booked: '✓ ¡Reserva confirmada!',
+  cancelled: '✓ Reserva cancelada correctamente.',
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function ClasesPage({
@@ -121,10 +125,10 @@ export default async function ClasesPage({
   searchParams,
 }: {
   params: Promise<{ studio: string }>
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; success?: string }>
 }) {
   const { studio } = await params
-  const { error } = await searchParams
+  const { error, success } = await searchParams
 
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
@@ -220,6 +224,7 @@ export default async function ClasesPage({
   const dateKeys = Object.keys(grouped).sort()
 
   const errorMsg = error ? (ERROR_MESSAGES[error] ?? 'Algo salió mal. Intentá de nuevo.') : null
+  const successMsg = success ? (SUCCESS_MESSAGES[success] ?? null) : null
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -246,6 +251,16 @@ export default async function ClasesPage({
           </Link>
         )}
       </div>
+
+      {/* Success banner */}
+      {successMsg && (
+        <div
+          className="mb-5 mx-4 rounded-xl px-4 py-3 text-sm font-medium"
+          style={{ background: '#EDF4ED', color: 'var(--sage)' }}
+        >
+          {successMsg}
+        </div>
+      )}
 
       {/* Error banner */}
       {errorMsg && (
@@ -312,6 +327,8 @@ export default async function ClasesPage({
                         myBookingStatus={s.myBooking?.status ?? null}
                         myBookingId={s.myBooking?.id ?? null}
                         isAdmin={isAdmin}
+                        bookAction={bookClassAction}
+                        cancelAction={cancelClassAction}
                       />
                     ))}
                   </div>
@@ -325,211 +342,3 @@ export default async function ClasesPage({
   )
 }
 
-// ── SessionCard ────────────────────────────────────────────────────────────────
-
-function SessionCard({
-  sessionId,
-  studio,
-  time,
-  className,
-  spotsLeft,
-  capacity,
-  isBookable,
-  isCancellable,
-  canLeaveWaitlist,
-  myBookingStatus,
-  myBookingId,
-  isAdmin,
-}: {
-  sessionId: string
-  studio: string
-  time: string
-  className: string
-  spotsLeft: number
-  capacity: number
-  isBookable: boolean
-  isCancellable: boolean
-  canLeaveWaitlist: boolean
-  myBookingStatus: string | null
-  myBookingId: string | null
-  isAdmin: boolean
-}) {
-  const isConfirmed = myBookingStatus === 'CONFIRMED'
-  const isWaitlist = myBookingStatus === 'WAITLIST'
-  const isFull = spotsLeft === 0 && !isConfirmed && !isWaitlist
-
-  // Color del tiempo según estado
-  const timeColor = isConfirmed
-    ? 'var(--sage)'
-    : isWaitlist
-      ? 'var(--terracotta)'
-      : isFull
-        ? 'var(--stone)'
-        : 'var(--sage)'
-
-  // Texto de disponibilidad
-  const spotsText = isConfirmed
-    ? 'Reservada'
-    : isWaitlist
-      ? 'En espera'
-      : isFull
-        ? 'Sin lugares'
-        : spotsLeft === 1
-          ? 'Último lugar'
-          : `Últimos ${spotsLeft} lugares`
-
-  const spotsColor = isConfirmed
-    ? 'var(--sage)'
-    : isWaitlist
-      ? 'var(--terracotta)'
-      : isFull
-        ? '#C4B8AC'
-        : 'var(--sage)'
-
-  return (
-    <div
-      style={{
-        background: 'white',
-        borderRadius: '14px',
-        padding: '12px',
-        border: isConfirmed
-          ? '1px solid var(--sage)'
-          : isWaitlist
-            ? '1px solid var(--terracotta)'
-            : '1px solid #E8E0D6',
-      }}
-    >
-      {/* Tiempo */}
-      <p
-        className="mb-0.5 font-medium tabular-nums"
-        style={{ fontSize: '15px', color: timeColor, lineHeight: 1 }}
-      >
-        {time}
-      </p>
-
-      {/* Nombre clase */}
-      <p
-        className="font-semibold"
-        style={{ fontSize: '13px', color: 'var(--ink)', lineHeight: 1.2, marginBottom: '4px' }}
-      >
-        {className}
-      </p>
-
-      {/* Disponibilidad */}
-      <p style={{ fontSize: '11px', color: spotsColor, marginBottom: spotsText !== 'Sin lugares' ? '8px' : '0' }}>
-        {spotsText}
-      </p>
-
-      {/* Acciones */}
-      {isConfirmed && isCancellable && (
-        <form action={cancelClassAction}>
-          <input type="hidden" name="bookingId" value={myBookingId!} />
-          <input type="hidden" name="studio" value={studio} />
-          <button
-            type="submit"
-            style={{
-              width: '100%',
-              padding: '5px 0',
-              borderRadius: '8px',
-              fontSize: '11px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              background: '#F0EDEB',
-              color: 'var(--stone)',
-              border: 'none',
-            }}
-          >
-            Cancelar
-          </button>
-        </form>
-      )}
-
-      {isWaitlist && canLeaveWaitlist && (
-        <form action={cancelClassAction}>
-          <input type="hidden" name="bookingId" value={myBookingId!} />
-          <input type="hidden" name="studio" value={studio} />
-          <button
-            type="submit"
-            style={{
-              width: '100%',
-              padding: '5px 0',
-              borderRadius: '8px',
-              fontSize: '11px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              background: '#FDF0EC',
-              color: 'var(--terracotta)',
-              border: 'none',
-            }}
-          >
-            Salir de lista
-          </button>
-        </form>
-      )}
-
-      {isBookable && !isFull && (
-        <form action={bookClassAction}>
-          <input type="hidden" name="classSessionId" value={sessionId} />
-          <input type="hidden" name="studio" value={studio} />
-          <button
-            type="submit"
-            style={{
-              width: '100%',
-              padding: '5px 0',
-              borderRadius: '8px',
-              fontSize: '11px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              background: 'var(--sage)',
-              color: 'white',
-              border: 'none',
-            }}
-          >
-            Reservar
-          </button>
-        </form>
-      )}
-
-      {isBookable && isFull && (
-        <form action={bookClassAction}>
-          <input type="hidden" name="classSessionId" value={sessionId} />
-          <input type="hidden" name="studio" value={studio} />
-          <button
-            type="submit"
-            style={{
-              width: '100%',
-              padding: '5px 0',
-              borderRadius: '8px',
-              fontSize: '11px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              background: '#FDF0EC',
-              color: 'var(--terracotta)',
-              border: 'none',
-            }}
-          >
-            Lista de espera
-          </button>
-        </form>
-      )}
-
-      {/* Admin: link a detalle */}
-      {isAdmin && (
-        <Link
-          href={`/${studio}/admin/sesiones/${sessionId}`}
-          style={{
-            display: 'block',
-            marginTop: '6px',
-            textAlign: 'center',
-            fontSize: '10px',
-            color: 'var(--stone)',
-            textDecoration: 'none',
-            opacity: 0.6,
-          }}
-        >
-          ⚙ gestionar
-        </Link>
-      )}
-    </div>
-  )
-}

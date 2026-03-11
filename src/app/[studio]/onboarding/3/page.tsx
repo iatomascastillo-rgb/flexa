@@ -8,22 +8,25 @@ import { prisma } from '@/lib/prisma'
 
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
-/** Devuelve las próximas `weeks` fechas para el día de semana dado (0=Dom...6=Sáb). */
+/** Devuelve las próximas `weeks` fechas para el día de semana dado (0=Dom...6=Sáb).
+ *  Almacena a las 12:00 UTC para que en UTC-3 (Argentina) siga siendo el mismo día.
+ */
 function getNextDates(dayIndex: number, weeks: number): Date[] {
-  const dates: Date[] = []
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const now = new Date()
+  // Día actual en Argentina (UTC-3)
+  const arNow = new Date(now.getTime() - 3 * 60 * 60 * 1000)
+  const todayDow = arNow.getUTCDay()
+  // Mediodía UTC = 9 AM Argentina: seguro para cualquier día del mes
+  const todayNoon = new Date(
+    Date.UTC(arNow.getUTCFullYear(), arNow.getUTCMonth(), arNow.getUTCDate(), 12, 0, 0)
+  )
 
-  let daysAhead = (dayIndex - today.getDay() + 7) % 7
+  let daysAhead = (dayIndex - todayDow + 7) % 7
   if (daysAhead === 0) daysAhead = 7 // empezar la semana que viene si es hoy
 
-  const first = new Date(today)
-  first.setDate(first.getDate() + daysAhead)
-
+  const dates: Date[] = []
   for (let i = 0; i < weeks; i++) {
-    const d = new Date(first)
-    d.setDate(first.getDate() + i * 7)
-    dates.push(d)
+    dates.push(new Date(todayNoon.getTime() + (daysAhead + i * 7) * 24 * 60 * 60 * 1000))
   }
   return dates
 }

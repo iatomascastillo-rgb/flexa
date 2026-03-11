@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* Design system — Pilates SaaS */
+  --cream: #F7F3EE;
+  --sage: #5C7A5E;
+  --sage-light: #8FA891;
+  --terracotta: #C4774A;
+  --terracotta-light: #F5E8DE;
+  --stone: #8C7B6B;
+  --ink: #2C2C2C;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-cormorant);
+  --font-body: var(--font-dm-sans);
+
+  /* App colors */
+  --color-cream: var(--cream);
+  --color-sage: var(--sage);
+  --color-sage-light: var(--sage-light);
+  --color-terracotta: var(--terracotta);
+  --color-terracotta-light: var(--terracotta-light);
+  --color-stone: var(--stone);
+  --color-ink: var(--ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}

@@ -1,0 +1,467 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  STUDIO_ADMIN
+  STUDENT
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  MERCADOPAGO
+  TRANSFER
+  CASH
+  ADMIN_GRANT
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  WAITLIST
+}
+
+enum BookingOrigin {
+  RECURRING
+  MANUAL
+  ADMIN
+}
+
+enum AttendanceStatus {
+  ATTENDED
+  NO_SHOW
+}
+
+enum CreditTransactionType {
+  PURCHASE
+  BOOKING_DEDUCT
+  CANCELLATION_REFUND
+  GRACE_DEBT_SETTLEMENT
+  PLAN_CHANGE_DEDUCT
+  PLAN_CHANGE_TRANSFER
+  ADMIN_ADJUSTMENT
+}
+
+enum LateCancellationPolicy {
+  LOSE_CREDIT
+  KEEP_CREDIT
+}
+
+enum NoShowPolicy {
+  LOSE_CREDIT
+  KEEP_CREDIT
+}
+
+enum GraceOnNoPay {
+  RELEASE_TO_WAITLIST
+  KEEP_AND_ALERT
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  TRIAL_EXPIRED
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+enum SubscriptionPlan {
+  BASICO
+  PRO
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+// ─── Tables ──────────────────────────────────────────────────────────────────
+
+/// Punto de entrada del tenant. No tiene studioId — es la raíz.
+model Studio {
+  id           String  @id @default(cuid())
+  name         String
+  slug         String  @unique
+  active       Boolean @default(true)
+  internalNote String? // Nota privada del SuperAdmin sobre este estudio
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  settings           StudioSettings?
+  branding           StudioBranding?
+  subscription       Subscription?
+  users              User[]
+  classTypes         ClassType[]
+  classSessions      ClassSession[]
+  packages           Package[]
+  userPackages       UserPackage[]
+  bookings           Booking[]
+  recurringSchedules RecurringSchedule[]
+  creditTransactions CreditTransaction[]
+  auditLogs          AuditLog[]
+  platformEvents     PlatformEvent[]
+  saasPayments       SaasPayment[]
+
+  @@map("studios")
+}
+
+/// Pagos SaaS del estudio a la plataforma Flexa.
+/// Se crea manualmente desde el panel SuperAdmin, o automáticamente via webhook de MercadoPago SaaS.
+model SaasPayment {
+  id          String    @id @default(cuid())
+  studioId    String
+  studio      Studio    @relation(fields: [studioId], references: [id])
+
+  amount      Int       // en ARS (pesos enteros, ej: 12000)
+  period      String    // "YYYY-MM" — mes al que corresponde el pago
+  method      String    // "TRANSFER" | "CASH" | "MERCADOPAGO"
+  paidAt      DateTime  // fecha en que se efectuó el pago
+  notes       String?   // nota libre (ej: "pago parcial", "descuento acordado")
+
+  /// ID de MercadoPago — para idempotencia cuando venga del webhook
+  mpPaymentId String?   @unique
+
+  createdAt   DateTime  @default(now())
+
+  @@index([studioId, paidAt])
+  @@map("saas_payments")
+}
+
+/// Toda la lógica de negocio lee de aquí. Nunca valores hardcodeados.
+model StudioSettings {
+  id                    String                 @id @default(cuid())
+  studioId              String                 @unique
+  studio                Studio                 @relation(fields: [studioId], references: [id])
+
+  cancellationHours     Int                    @default(12)
+  lateCancellationPolicy LateCancellationPolicy @default(LOSE_CREDIT)
+  noShowPolicy          NoShowPolicy           @default(LOSE_CREDIT)
+  allowWaitlist         Boolean                @default(true)
+  bookingWindowHours    Int                    @default(1)
+  generationDayOfMonth  Int                    @default(25)
+  waitlistAutoPromote   Boolean                @default(true)
+  gracePeriodEnabled    Boolean                @default(false)
+  gracePeriodCutoffDay  Int                    @default(10)
+  graceRequiresHistory  Boolean                @default(true)
+  graceOnNoPay          GraceOnNoPay           @default(RELEASE_TO_WAITLIST)
+
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@map("studio_settings")
+}
+
+/// Branding personalizado por estudio (Fase 2).
+model StudioBranding {
+  id             String   @id @default(cuid())
+  studioId       String   @unique
+  studio         Studio   @relation(fields: [studioId], references: [id])
+
+  primaryColor   String?
+  accentColor    String?
+  logoUrl        String?
+  welcomeMessage String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("studio_branding")
+}
+
+/// Suscripción SaaS del estudio a la plataforma.
+model Subscription {
+  id                   String             @id @default(cuid())
+  studioId             String             @unique
+  studio               Studio             @relation(fields: [studioId], references: [id])
+
+  status               SubscriptionStatus @default(TRIAL)
+  plan                 SubscriptionPlan   @default(BASICO)
+  trialEndsAt          DateTime?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@map("subscriptions")
+}
+
+/// Alumnos y admins. Pertenecen a un solo estudio.
+model User {
+  id               String   @id @default(cuid())
+  studioId         String
+  studio           Studio   @relation(fields: [studioId], references: [id])
+
+  email            String
+  passwordHash     String
+  name             String
+  phone            String?
+  role             Role     @default(STUDENT)
+  active           Boolean  @default(true)
+  whatsappOptOut   Boolean  @default(false)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  bookings              Booking[]
+  userPackages          UserPackage[]
+  approvedPackages      UserPackage[]       @relation("ApprovedBy")
+  recurringSchedules    RecurringSchedule[]
+  creditTransactions    CreditTransaction[] @relation("CreatedBy")
+  auditLogs             AuditLog[]
+
+  @@unique([email, studioId])
+  @@map("users")
+}
+
+/// Tipos de clase del estudio.
+model ClassType {
+  id              String   @id @default(cuid())
+  studioId        String
+  studio          Studio   @relation(fields: [studioId], references: [id])
+
+  name            String
+  description     String?
+  level           String?
+  defaultCapacity Int
+  active          Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  classSessions      ClassSession[]
+  recurringSchedules RecurringSchedule[]
+
+  @@map("class_types")
+}
+
+/// Cada clase concreta. Creadas por el cron el día 25.
+model ClassSession {
+  id               String    @id @default(cuid())
+  studioId         String
+  studio           Studio    @relation(fields: [studioId], references: [id])
+
+  classTypeId      String
+  classType        ClassType @relation(fields: [classTypeId], references: [id])
+
+  date             DateTime  @db.Date
+  time             String    // "HH:mm" — ej: "09:00"
+  capacityOverride Int?      // null = usar classType.defaultCapacity
+  cancelledAt      DateTime?
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  bookings         Booking[]
+
+  @@unique([studioId, date, time, classTypeId])
+  @@index([studioId, date])
+  @@index([studioId, classTypeId, date])
+  @@map("class_sessions")
+}
+
+/// Paquetes disponibles para comprar. Precio en centavos ARS.
+model Package {
+  id          String   @id @default(cuid())
+  studioId    String
+  studio      Studio   @relation(fields: [studioId], references: [id])
+
+  name        String
+  classCount  Int
+  price       Int      // centavos ARS. Ej: $24.000 = 2_400_000
+  active      Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userPackages UserPackage[]
+
+  @@map("packages")
+}
+
+/// Fuente de verdad de créditos. Un alumno puede tener múltiples activos.
+model UserPackage {
+  id              String        @id @default(cuid())
+  studioId        String
+  studio          Studio        @relation(fields: [studioId], references: [id])
+
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+
+  /// Null cuando es un ajuste manual del admin (ADMIN_GRANT)
+  packageId       String?
+  package         Package?      @relation(fields: [packageId], references: [id])
+
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentMethod   PaymentMethod
+  /// ID de MercadoPago. Usado para idempotencia en webhooks.
+  paymentId       String?
+
+  classesTotal    Int
+  classesRemaining Int           // CHECK classes_remaining >= 0 — ver migración manual
+  expiresAt       DateTime      // último día del mes a las 23:59:59
+  activatedAt     DateTime?
+
+  /// userId del admin que aprobó (efectivo/transferencia/ajuste manual)
+  approvedBy      String?
+  approvedByUser  User?         @relation("ApprovedBy", fields: [approvedBy], references: [id])
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  bookings           Booking[]
+  creditTransactions CreditTransaction[]
+
+  @@index([studioId, userId, expiresAt])          // FIFO de créditos
+  @@index([studioId, paymentStatus])              // reportes
+  @@index([studioId, userId, paymentStatus])      // elegibilidad para gracia
+  @@index([studioId, paymentId])                  // idempotencia webhook
+  @@map("user_packages")
+}
+
+/// Reservas. NUNCA se borran — solo cambian de status.
+model Booking {
+  id                 String           @id @default(cuid())
+  studioId           String
+  studio             Studio           @relation(fields: [studioId], references: [id])
+
+  userId             String
+  user               User             @relation(fields: [userId], references: [id])
+
+  classSessionId     String
+  classSession       ClassSession     @relation(fields: [classSessionId], references: [id])
+
+  /// Null = reserva en período de gracia (deuda pendiente)
+  userPackageId      String?
+  userPackage        UserPackage?     @relation(fields: [userPackageId], references: [id])
+
+  status             BookingStatus    @default(CONFIRMED)
+  origin             BookingOrigin    @default(MANUAL)
+  attendanceStatus   AttendanceStatus?
+  creditRefunded     Boolean          @default(false)
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([userId, classSessionId])
+  @@index([studioId, classSessionId, status])    // contar capacidad
+  @@index([studioId, userId, status])            // mis reservas
+  @@index([studioId, userPackageId])             // liquidación gracia + reportes
+  @@index([studioId, userId, userPackageId])     // buscar reservas en gracia
+  @@map("bookings")
+}
+
+/// Configuración de días fijos por alumno.
+model RecurringSchedule {
+  id          String    @id @default(cuid())
+  studioId    String
+  studio      Studio    @relation(fields: [studioId], references: [id])
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+
+  classTypeId String
+  classType   ClassType @relation(fields: [classTypeId], references: [id])
+
+  dayOfWeek   DayOfWeek
+  time        String    // "HH:mm"
+  active      Boolean   @default(true)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([studioId, userId, active])
+  @@index([studioId, dayOfWeek, time])
+  @@map("recurring_schedules")
+}
+
+/// Log auditable de movimientos de créditos. Solo INSERT, nunca UPDATE.
+model CreditTransaction {
+  id            String                @id @default(cuid())
+  studioId      String
+  studio        Studio                @relation(fields: [studioId], references: [id])
+
+  userPackageId String
+  userPackage   UserPackage           @relation(fields: [userPackageId], references: [id])
+
+  type          CreditTransactionType
+  amount        Int                   // positivo = suma, negativo = descuento
+  balanceAfter  Int                   // saldo después del movimiento
+
+  /// Requerido para ADMIN_ADJUSTMENT
+  note          String?
+  /// userId del admin (solo para ADMIN_ADJUSTMENT)
+  createdBy     String?
+  createdByUser User?                 @relation("CreatedBy", fields: [createdBy], references: [id])
+
+  bookingId     String?               // referencia opcional al booking relacionado
+
+  createdAt     DateTime              @default(now())
+
+  @@index([studioId, userPackageId])
+  @@index([studioId, createdAt])
+  @@map("credit_transactions")
+}
+
+/// Log de acciones del sistema. Solo INSERT, nunca UPDATE.
+model AuditLog {
+  id         String   @id @default(cuid())
+  studioId   String
+  studio     Studio   @relation(fields: [studioId], references: [id])
+
+  /// Null en acciones de sistema (cron, webhook)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+
+  action     String   // ej: "BOOKING_CREATED", "SESSION_CANCELLED", "PACKAGE_ACTIVATED"
+  entityType String   // ej: "Booking", "ClassSession", "UserPackage"
+  entityId   String
+
+  before     Json?
+  after      Json?
+  metadata   Json?
+
+  createdAt  DateTime @default(now())
+
+  @@index([studioId, createdAt])
+  @@index([studioId, userId])
+  @@map("audit_logs")
+}
+
+/// Eventos de plataforma (cambios de estado de suscripción, etc.)
+model PlatformEvent {
+  id        String   @id @default(cuid())
+  studioId  String
+  studio    Studio   @relation(fields: [studioId], references: [id])
+
+  type      String   // ej: "TRIAL_EXPIRED", "STUDIO_SUSPENDED"
+  data      Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([studioId, createdAt])
+  @@map("platform_events")
+}
+
+// -- MIGRATION: ALTER TABLE user_packages ADD CONSTRAINT classes_remaining_non_negative CHECK (classes_remaining >= 0);

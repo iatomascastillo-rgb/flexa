@@ -46,12 +46,12 @@ export default async function PerfilPage({
   const { studio } = await params
 
   const session = await auth()
-  if (!session?.user?.id) redirect('/login')
+  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/perfil`)
 
   const tenant = await getTenantBySlug(studio)
   if (!tenant) notFound()
 
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
+  if (session.user.studioId !== tenant.studioId) redirect(`/login?callbackUrl=/${studio}/perfil`)
 
   const user = session.user
   const isSuperAdmin = user.role === 'SUPER_ADMIN'

@@ -84,13 +84,13 @@ export default async function HomePage({
   const { studio } = await params
   const session = await auth()
 
-  if (!session?.user?.id) redirect('/login')
+  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}`)
 
   const tenant = await getTenantBySlug(studio)
   if (!tenant) notFound()
 
   // Seguridad: el alumno solo puede ver su propio estudio
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
+  if (session.user.studioId !== tenant.studioId) redirect(`/login?callbackUrl=/${studio}`)
 
   const userId = session.user.id
   const studioId = tenant.studioId

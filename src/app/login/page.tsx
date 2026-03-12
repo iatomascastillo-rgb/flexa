@@ -11,8 +11,11 @@ function LoginForm() {
 
   // callbackUrl viene de NextAuth: "?callbackUrl=/centro-pilates"
   const callbackUrl = searchParams.get('callbackUrl') ?? '/'
-  // Extraer el slug del studio del callbackUrl: "/centro-pilates/..." → "centro-pilates"
-  const studioSlug = callbackUrl.replace(/^\//, '').split('/')[0] ?? ''
+
+  // Extraer slug solo si el primer segmento es un studio real, no una ruta reservada
+  const RESERVED = new Set(['superadmin', 'api', 'auth', 'login', 'registro', 'auth-test'])
+  const firstSegment = callbackUrl.replace(/^\//, '').split('/')[0] ?? ''
+  const studioSlug = RESERVED.has(firstSegment) ? '' : firstSegment
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

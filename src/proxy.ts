@@ -2,7 +2,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
 export async function proxy(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET })
+  // NextAuth v5 usa "authjs.session-token" (no "next-auth.session-token" de v4)
+  // En HTTPS (producción) el prefijo __Secure- se agrega automáticamente
+  const secureCookie = req.url.startsWith('https')
+  const cookieName = secureCookie ? '__Secure-authjs.session-token' : 'authjs.session-token'
+  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? ''
+  const token = await getToken({ req, secret, cookieName, salt: cookieName })
   const { pathname } = req.nextUrl
 
   // ── /superadmin/* → solo SUPER_ADMIN ──────────────────────────────────────

@@ -5,6 +5,7 @@ import { prisma } from './prisma'
 import type { Role } from '@prisma/client'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   trustHost: true,
   session: { strategy: 'jwt' },
 
@@ -64,16 +65,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // user solo existe en el primer sign-in
+        // Primer sign-in: poblar todos los campos desde el objeto user
         token.role = (user as { role: Role }).role
         token.studioId = (user as { studioId: string }).studioId
         token.id = (user as { id: string }).id
       }
+
+      // Si el token no tiene role/studioId (JWT antiguo o primera vez),
+      // recuperarlos desde la DB para que la sesión quede completa
+      if (token.sub && (!token.role || !token.studioId)) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.sub },
+            select: { role: true, studioId: true },
+          })
+          if (dbUser) {
+            token.role = dbUser.role
+            token.studioId = dbUser.studioId
+          }
+        } catch {
+          // Si la DB falla, el token queda incompleto y la página redirige al login
+        }
+      }
+
       return token
     },
 
     async session({ session, token }) {
-      session.user.id = token.sub!
+      session.user.id = (token.sub ?? token.id) as string
       if (token.role) session.user.role = token.role as Role
       if (token.studioId) session.user.studioId = token.studioId as string
       return session

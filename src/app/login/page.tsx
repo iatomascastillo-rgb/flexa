@@ -2,13 +2,12 @@
 
 import { useState, Suspense } from 'react'
 import { signIn } from 'next-auth/react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 // ── Formulario ────────────────────────────────────────────────────────────────
 
 function LoginForm() {
   const searchParams = useSearchParams()
-  const router = useRouter()
 
   // callbackUrl viene de NextAuth: "?callbackUrl=/centro-pilates"
   const callbackUrl = searchParams.get('callbackUrl') ?? '/'
@@ -37,8 +36,8 @@ function LoginForm() {
       setError('Email, contraseña o estudio incorrectos.')
       setLoading(false)
     } else {
-      router.push(callbackUrl !== '/' ? callbackUrl : `/${slug}`)
-      router.refresh()
+      // Full page navigation so Vercel's serverless functions receive the new session cookie
+      window.location.href = callbackUrl !== '/' ? callbackUrl : `/${slug}`
     }
   }
 

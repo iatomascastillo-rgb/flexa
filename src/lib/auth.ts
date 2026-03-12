@@ -65,11 +65,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id as string
+        // Copiar directamente desde authorize() — no depender solo del DB lookup
+        if (user.role) token.role = user.role
+        if (user.studioId) token.studioId = user.studioId
       }
 
-      // Siempre buscar role/studioId en DB cuando no están en el token.
-      // Esto cubre: primer sign-in, tokens viejos, y posibles problemas de
-      // NextAuth v5 beta al no pasar campos custom desde authorize al jwt callback.
+      // DB lookup como fallback para tokens viejos que no tienen role/studioId
       if (token.sub && (!token.role || !token.studioId)) {
         try {
           const dbUser = await prisma.user.findUnique({

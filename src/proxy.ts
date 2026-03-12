@@ -7,17 +7,25 @@ export async function proxy(req: NextRequest) {
 
   // ── /superadmin/* → solo SUPER_ADMIN ──────────────────────────────────────
   if (pathname.startsWith('/superadmin')) {
-    if (!token) return NextResponse.redirect(new URL('/login', req.url))
-    if (token.role !== 'SUPER_ADMIN') return NextResponse.redirect(new URL('/', req.url))
+    if (!token || token.role !== 'SUPER_ADMIN') {
+      const url = new URL('/login', req.url)
+      url.searchParams.set('studio', 'flexa')
+      url.searchParams.set('callbackUrl', '/superadmin')
+      return NextResponse.redirect(url)
+    }
     return NextResponse.next()
   }
 
   // ── /[studio]/admin/* → STUDIO_ADMIN o SUPER_ADMIN ───────────────────────
-  const isAdminRoute = /^\/[^/]+\/admin(\/|$)/.test(pathname)
-  if (isAdminRoute) {
-    if (!token) return NextResponse.redirect(new URL('/login', req.url))
+  const adminMatch = /^\/([^/]+)\/admin(\/|$)/.exec(pathname)
+  if (adminMatch) {
+    if (!token) {
+      const url = new URL('/login', req.url)
+      url.searchParams.set('callbackUrl', pathname)
+      return NextResponse.redirect(url)
+    }
     if (token.role !== 'STUDIO_ADMIN' && token.role !== 'SUPER_ADMIN') {
-      return NextResponse.redirect(new URL('/', req.url))
+      return NextResponse.redirect(new URL(`/${adminMatch[1]}`, req.url))
     }
     return NextResponse.next()
   }

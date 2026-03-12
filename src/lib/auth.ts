@@ -21,7 +21,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
-        // Resolver studioId desde el slug — nunca del cliente
         const studio = await prisma.studio.findUnique({
           where: { slug: String(credentials.studioSlug), active: true },
           select: { id: true },
@@ -65,14 +64,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // Primer sign-in: poblar todos los campos desde el objeto user
-        token.role = (user as { role: Role }).role
-        token.studioId = (user as { studioId: string }).studioId
-        token.id = (user as { id: string }).id
+        token.id = user.id as string
       }
 
-      // Si el token no tiene role/studioId (JWT antiguo o primera vez),
-      // recuperarlos desde la DB para que la sesión quede completa
+      // Siempre buscar role/studioId en DB cuando no están en el token.
+      // Esto cubre: primer sign-in, tokens viejos, y posibles problemas de
+      // NextAuth v5 beta al no pasar campos custom desde authorize al jwt callback.
       if (token.sub && (!token.role || !token.studioId)) {
         try {
           const dbUser = await prisma.user.findUnique({
@@ -83,8 +80,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.role = dbUser.role
             token.studioId = dbUser.studioId
           }
-        } catch {
-          // Si la DB falla, el token queda incompleto y la página redirige al login
+        } catch (error) {
+          console.error('[auth] JWT DB lookup failed:', error)
         }
       }
 

@@ -15,7 +15,9 @@ function LoginForm() {
   // Extraer slug solo si el primer segmento es un studio real, no una ruta reservada
   const RESERVED = new Set(['superadmin', 'api', 'auth', 'login', 'registro', 'auth-test'])
   const firstSegment = callbackUrl.replace(/^\//, '').split('/')[0] ?? ''
-  const studioSlug = RESERVED.has(firstSegment) ? '' : firstSegment
+  // ?studio=xxx permite pre-llenar el campo cuando callbackUrl es una ruta reservada (ej: /superadmin)
+  const studioParam = searchParams.get('studio') ?? ''
+  const studioSlug = RESERVED.has(firstSegment) ? studioParam : firstSegment
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

@@ -3,12 +3,7 @@ import Link from 'next/link'
 import { auth, signOut } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 
-// ── Server Action ──────────────────────────────────────────────────────────────
-
-async function logoutAction() {
-  'use server'
-  await signOut({ redirectTo: '/login' })
-}
+// logoutAction se define dentro del Page para capturar el studio slug
 
 // ── Shared components ─────────────────────────────────────────────────────────
 
@@ -44,6 +39,11 @@ export default async function PerfilPage({
   params: Promise<{ studio: string }>
 }) {
   const { studio } = await params
+
+  async function logoutAction() {
+    'use server'
+    await signOut({ redirectTo: `/login?callbackUrl=/${studio}/perfil` })
+  }
 
   const session = await auth()
   if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/perfil`)

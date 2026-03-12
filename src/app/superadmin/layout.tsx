@@ -4,8 +4,8 @@ import { auth } from '@/lib/auth'
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
-  if (!session?.user?.id) redirect('/login?callbackUrl=/superadmin')
-  if (session.user.role !== 'SUPER_ADMIN') redirect('/login?callbackUrl=/superadmin')
+  if (!session?.user?.id) redirect('/login?studio=flexa&callbackUrl=/superadmin')
+  if (session.user.role !== 'SUPER_ADMIN') redirect('/login?studio=flexa&callbackUrl=/superadmin')
 
   return (
     <div style={{ fontFamily: 'var(--font-dm-sans, system-ui)', minHeight: '100vh', background: '#0F0F0F', color: '#E8E8E8' }}>

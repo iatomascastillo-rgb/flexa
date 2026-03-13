@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
+import { getStudioSettings } from '@/lib/cache'
 import { createBooking, cancelBooking } from '@/services/booking.service'
 import { AppError } from '@/types/errors'
 import { SessionCard } from './SessionCard'
@@ -176,10 +177,8 @@ export default async function ClasesPage({
       select: { id: true, classSessionId: true, status: true },
     }),
 
-    prisma.studioSettings.findUnique({
-      where: { studioId },
-      select: { cancellationHours: true, bookingWindowHours: true, allowWaitlist: true },
-    }),
+    // Settings (cacheado 1h)
+    getStudioSettings(studioId),
   ])
 
   // ── Procesar y filtrar sesiones ────────────────────────────────────────────

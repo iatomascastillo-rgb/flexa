@@ -1,4 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
+import { revalidateTag } from 'next/cache'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
@@ -42,6 +43,7 @@ async function savePoliticasAction(formData: FormData) {
     },
   })
 
+  revalidateTag(`settings-${tenant.studioId}`)
   redirect(`/${studio}/admin/settings/politicas?saved=1`)
 }
 

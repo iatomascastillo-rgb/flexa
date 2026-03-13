@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
+import { getStudioSettings } from '@/lib/cache'
 import { cancelBooking } from '@/services/booking.service'
 import { AppError } from '@/types/errors'
 
@@ -111,11 +112,8 @@ export default async function HomePage({
         },
       }),
 
-      // Settings para ventana de cancelación
-      prisma.studioSettings.findUnique({
-        where: { studioId },
-        select: { cancellationHours: true },
-      }),
+      // Settings para ventana de cancelación (cacheado 1h)
+      getStudioSettings(studioId),
 
       // Reservas en gracia sin pagar (futuras)
       prisma.booking.count({

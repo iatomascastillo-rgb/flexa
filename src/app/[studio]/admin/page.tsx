@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
+import { getMonthlyAdminMetrics } from '@/lib/cache'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -56,131 +57,82 @@ export default async function AdminDashboardPage({
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
 
-  // ── Queries paralelas ──────────────────────────────────────────────────────
+  // ── Queries dinámicas (tiempo real) + métricas mensuales (cache 1h) ──────
   const [
-    todaySessions,
-    pendingPaymentPackages,
-    studentsWithoutPackageCount,
-    monthlyPackages,
-    prevMonthPackages,
-    newStudentsCount,
-    totalActiveStudents,
-    activeWithBookingsThisMonth,
-    monthSessions,
-    monthCancellations,
-    monthNoShows,
+    [todaySessions, pendingPaymentPackages, studentsWithoutPackageCount, monthSessions, monthNoShows],
+    { monthlyPackages, prevMonthPackages, newStudentsCount, totalActiveStudents, activeWithBookingsThisMonth, monthCancellations },
   ] = await Promise.all([
-    // Sesiones de hoy con asistencia
-    prisma.classSession.findMany({
-      where: { studioId, date: { gte: todayStart, lt: tomorrowStart }, cancelledAt: null },
-      orderBy: { time: 'asc' },
-      select: {
-        id: true,
-        time: true,
-        capacityOverride: true,
-        classType: { select: { name: true, defaultCapacity: true } },
-        bookings: {
-          where: { status: { in: ['CONFIRMED', 'WAITLIST'] } },
-          select: {
-            status: true,
-            attendanceStatus: true,
-            user: { select: { id: true, name: true } },
+    Promise.all([
+      // Sesiones de hoy con asistencia
+      prisma.classSession.findMany({
+        where: { studioId, date: { gte: todayStart, lt: tomorrowStart }, cancelledAt: null },
+        orderBy: { time: 'asc' },
+        select: {
+          id: true,
+          time: true,
+          capacityOverride: true,
+          classType: { select: { name: true, defaultCapacity: true } },
+          bookings: {
+            where: { status: { in: ['CONFIRMED', 'WAITLIST'] } },
+            select: {
+              status: true,
+              attendanceStatus: true,
+              user: { select: { id: true, name: true } },
+            },
           },
         },
-      },
-    }),
+      }),
 
-    // Paquetes pendientes de confirmación manual
-    prisma.userPackage.findMany({
-      where: { studioId, paymentStatus: 'PENDING', paymentMethod: { in: ['TRANSFER', 'CASH'] } },
-      select: {
-        id: true,
-        classesTotal: true,
-        paymentMethod: true,
-        createdAt: true,
-        user: { select: { id: true, name: true } },
-        package: { select: { name: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    }),
-
-    // Alumnos sin paquete activo
-    prisma.user.count({
-      where: {
-        studioId,
-        role: 'STUDENT',
-        active: true,
-        userPackages: {
-          none: { paymentStatus: 'APPROVED', classesRemaining: { gt: 0 }, expiresAt: { gte: now } },
+      // Paquetes pendientes de confirmación manual
+      prisma.userPackage.findMany({
+        where: { studioId, paymentStatus: 'PENDING', paymentMethod: { in: ['TRANSFER', 'CASH'] } },
+        select: {
+          id: true,
+          classesTotal: true,
+          paymentMethod: true,
+          createdAt: true,
+          user: { select: { id: true, name: true } },
+          package: { select: { name: true } },
         },
-      },
-    }),
+        orderBy: { createdAt: 'asc' },
+      }),
 
-    // Paquetes aprobados este mes (ingresos)
-    prisma.userPackage.findMany({
-      where: {
-        studioId,
-        paymentStatus: 'APPROVED',
-        activatedAt: { gte: monthStart },
-        packageId: { not: null },
-      },
-      select: { package: { select: { price: true } }, paymentMethod: true },
-    }),
-
-    // Paquetes aprobados mes anterior (comparación)
-    prisma.userPackage.findMany({
-      where: {
-        studioId,
-        paymentStatus: 'APPROVED',
-        activatedAt: { gte: prevMonthStart, lt: monthStart },
-        packageId: { not: null },
-      },
-      select: { package: { select: { price: true } } },
-    }),
-
-    // Alumnos nuevos este mes
-    prisma.user.count({ where: { studioId, role: 'STUDENT', createdAt: { gte: monthStart } } }),
-
-    // Total alumnos activos
-    prisma.user.count({ where: { studioId, role: 'STUDENT', active: true } }),
-
-    // Alumnos activos con al menos 1 reserva este mes
-    prisma.user.count({
-      where: {
-        studioId,
-        role: 'STUDENT',
-        active: true,
-        bookings: {
-          some: { status: 'CONFIRMED', classSession: { date: { gte: monthStart } } },
+      // Alumnos sin paquete activo
+      prisma.user.count({
+        where: {
+          studioId,
+          role: 'STUDENT',
+          active: true,
+          userPackages: {
+            none: { paymentStatus: 'APPROVED', classesRemaining: { gt: 0 }, expiresAt: { gte: now } },
+          },
         },
-      },
-    }),
+      }),
 
-    // Sesiones del mes (ocupación + horarios populares)
-    prisma.classSession.findMany({
-      where: { studioId, date: { gte: monthStart, lt: tomorrowStart }, cancelledAt: null },
-      select: {
-        date: true,
-        time: true,
-        capacityOverride: true,
-        classType: { select: { defaultCapacity: true } },
-        bookings: { where: { status: 'CONFIRMED' }, select: { id: true } },
-      },
-    }),
+      // Sesiones del mes (ocupación + horarios populares)
+      prisma.classSession.findMany({
+        where: { studioId, date: { gte: monthStart, lt: tomorrowStart }, cancelledAt: null },
+        select: {
+          date: true,
+          time: true,
+          capacityOverride: true,
+          classType: { select: { defaultCapacity: true } },
+          bookings: { where: { status: 'CONFIRMED' }, select: { id: true } },
+        },
+      }),
 
-    // Cancelaciones del mes
-    prisma.booking.count({
-      where: { studioId, status: 'CANCELLED', cancelledAt: { gte: monthStart } },
-    }),
+      // Ausencias del mes
+      prisma.booking.count({
+        where: {
+          studioId,
+          attendanceStatus: 'NO_SHOW',
+          classSession: { date: { gte: monthStart, lt: tomorrowStart } },
+        },
+      }),
+    ]),
 
-    // Ausencias del mes
-    prisma.booking.count({
-      where: {
-        studioId,
-        attendanceStatus: 'NO_SHOW',
-        classSession: { date: { gte: monthStart, lt: tomorrowStart } },
-      },
-    }),
+    // Métricas mensuales cacheadas 1 hora
+    getMonthlyAdminMetrics(studioId, monthStart, prevMonthStart),
   ])
 
   // ── Cómputos del día ──────────────────────────────────────────────────────

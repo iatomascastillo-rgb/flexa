@@ -8,6 +8,8 @@ interface SessionCardProps {
   studio: string
   time: string
   className: string
+  description?: string | null
+  instructorName?: string | null
   spotsLeft: number
   capacity: number
   isBookable: boolean
@@ -25,6 +27,8 @@ export function SessionCard({
   studio,
   time,
   className,
+  description,
+  instructorName,
   spotsLeft,
   isBookable,
   isCancellable,
@@ -106,10 +110,25 @@ export function SessionCard({
 
       <p
         className="font-semibold"
-        style={{ fontSize: '13px', color: 'var(--ink)', lineHeight: 1.2, marginBottom: '4px' }}
+        style={{ fontSize: '13px', color: 'var(--ink)', lineHeight: 1.2, marginBottom: instructorName || description ? '3px' : '4px' }}
       >
         {className}
       </p>
+
+      {instructorName && (
+        <p style={{ fontSize: '10px', color: 'var(--stone)', lineHeight: 1.2, marginBottom: '2px' }}>
+          {instructorName}
+        </p>
+      )}
+
+      {description && (
+        <p style={{
+          fontSize: '10px', color: 'var(--stone)', lineHeight: 1.3, marginBottom: '3px',
+          overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+        } as React.CSSProperties}>
+          {description}
+        </p>
+      )}
 
       <p style={{ fontSize: '11px', color: spotsColor, marginBottom: spotsText !== 'Sin lugares' ? '8px' : '0' }}>
         {spotsText}

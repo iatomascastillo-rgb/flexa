@@ -18,32 +18,34 @@ async function savePoliticasAction(formData: FormData) {
   const tenant = await getTenantBySlug(studio)
   if (!tenant || tenant.studioId !== session.user.studioId) return
 
+  const bookingWindowHours = Math.min(24, Math.max(0, parseInt(formData.get('bookingWindowHours') as string) || 0))
   const cancellationHours = Math.min(48, Math.max(1, parseInt(formData.get('cancellationHours') as string) || 12))
-  const lateCancellationPolicy = formData.get('lateCancellationPolicy') === 'KEEP_CREDIT' ? 'KEEP_CREDIT' : 'LOSE_CREDIT'
-  const noShowPolicy = formData.get('noShowPolicy') === 'KEEP_CREDIT' ? 'KEEP_CREDIT' : 'LOSE_CREDIT'
   const allowWaitlist = formData.get('allowWaitlist') === 'on'
   const waitlistAutoPromote = formData.get('waitlistAutoPromote') === 'on'
   const gracePeriodEnabled = formData.get('gracePeriodEnabled') === 'on'
   const gracePeriodCutoffDay = Math.min(28, Math.max(1, parseInt(formData.get('gracePeriodCutoffDay') as string) || 10))
   const graceRequiresHistory = formData.get('graceRequiresHistory') === 'on'
   const graceOnNoPay = formData.get('graceOnNoPay') === 'KEEP_AND_ALERT' ? 'KEEP_AND_ALERT' : 'RELEASE_TO_WAITLIST'
+  const recoveryEnabled = formData.get('recoveryEnabled') === 'on'
+  const recoveryDays = Math.min(30, Math.max(1, parseInt(formData.get('recoveryDays') as string) || 7))
 
   await prisma.studioSettings.update({
     where: { studioId: tenant.studioId },
     data: {
+      bookingWindowHours,
       cancellationHours,
-      lateCancellationPolicy,
-      noShowPolicy,
       allowWaitlist,
       waitlistAutoPromote,
       gracePeriodEnabled,
       gracePeriodCutoffDay,
       graceRequiresHistory,
       graceOnNoPay,
+      recoveryEnabled,
+      recoveryDays,
     },
   })
 
-  revalidateTag(`settings-${tenant.studioId}`)
+  revalidateTag(`settings-${tenant.studioId}`, {})
   redirect(`/${studio}/admin/settings/politicas?saved=1`)
 }
 
@@ -120,6 +122,28 @@ export default async function PoliticasPage({
             Cancelación
           </p>
 
+          {/* Ventana de reserva */}
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--ink)' }}>
+              Anticipación mínima para reservar
+            </label>
+            <p className="mb-2 text-xs" style={{ color: 'var(--stone)' }}>
+              Tiempo mínimo antes de que empiece la clase para poder reservar. Poné 0 para permitir reservas hasta el último momento.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                name="bookingWindowHours"
+                defaultValue={settings.bookingWindowHours}
+                min={0}
+                max={24}
+                className="w-24 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+                style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+              />
+              <span className="text-sm" style={{ color: 'var(--stone)' }}>horas</span>
+            </div>
+          </div>
+
           {/* Horas mínimas */}
           <div className="mb-4">
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--ink)' }}>
@@ -142,66 +166,12 @@ export default async function PoliticasPage({
             </div>
           </div>
 
-          {/* Política cancelación tarde */}
-          <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--ink)' }}>
-              Cancelación tarde
-            </label>
-            <div className="space-y-2">
-              {[
-                { value: 'LOSE_CREDIT', label: 'Pierde el crédito', desc: 'La alumna pierde el crédito si cancela tarde.' },
-                { value: 'KEEP_CREDIT', label: 'Conserva el crédito', desc: 'El crédito se devuelve aunque cancele tarde.' },
-              ].map((opt) => (
-                <label
-                  key={opt.value}
-                  className="flex cursor-pointer items-start gap-3 rounded-xl p-3"
-                  style={{ background: '#F7F3EE' }}
-                >
-                  <input
-                    type="radio"
-                    name="lateCancellationPolicy"
-                    value={opt.value}
-                    defaultChecked={settings.lateCancellationPolicy === opt.value}
-                    className="mt-0.5 shrink-0 accent-[var(--sage)]"
-                  />
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{opt.label}</p>
-                    <p className="text-xs" style={{ color: 'var(--stone)' }}>{opt.desc}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Política no-show */}
-          <div>
-            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--ink)' }}>
-              No-show (no asistió sin cancelar)
-            </label>
-            <div className="space-y-2">
-              {[
-                { value: 'LOSE_CREDIT', label: 'Pierde el crédito', desc: 'Si no asiste y no canceló, pierde el crédito.' },
-                { value: 'KEEP_CREDIT', label: 'Conserva el crédito', desc: 'Se devuelve el crédito aunque no haya cancelado.' },
-              ].map((opt) => (
-                <label
-                  key={opt.value}
-                  className="flex cursor-pointer items-start gap-3 rounded-xl p-3"
-                  style={{ background: '#F7F3EE' }}
-                >
-                  <input
-                    type="radio"
-                    name="noShowPolicy"
-                    value={opt.value}
-                    defaultChecked={settings.noShowPolicy === opt.value}
-                    className="mt-0.5 shrink-0 accent-[var(--sage)]"
-                  />
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{opt.label}</p>
-                    <p className="text-xs" style={{ color: 'var(--stone)' }}>{opt.desc}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
+          {/* Cancelación tarde y no-show: siempre pierden el crédito */}
+          <div
+            className="rounded-xl p-3 text-xs"
+            style={{ background: '#F7F3EE', color: 'var(--stone)' }}
+          >
+            Las cancelaciones tardías y los no-shows siempre consumen el crédito. Configurá la recuperación abajo para permitir que la alumna recupere la clase.
           </div>
         </div>
 
@@ -338,6 +308,57 @@ export default async function PoliticasPage({
                     </div>
                   </label>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Recuperación de créditos ── */}
+        <div
+          className="rounded-2xl p-5"
+          style={{ background: 'white', border: '1px solid #E8E0D6' }}
+        >
+          <p className="mb-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+            Recuperación de créditos
+          </p>
+          <p className="mb-4 text-xs" style={{ color: 'var(--stone)' }}>
+            Cuando una alumna pierde un crédito por no-show o cancelación tardía, podés otorgarle automáticamente un crédito extra con fecha de vencimiento corta para que pueda recuperar la clase.
+          </p>
+
+          <div className="space-y-4">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                name="recoveryEnabled"
+                defaultChecked={settings.recoveryEnabled}
+                className="mt-0.5 shrink-0 accent-[var(--sage)]"
+              />
+              <div>
+                <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Permitir recuperación de crédito</p>
+                <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                  Al marcar un no-show o al perder el crédito por cancelación tardía, el sistema genera automáticamente 1 crédito de recuperación.
+                </p>
+              </div>
+            </label>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--ink)' }}>
+                Días para usar el crédito de recuperación
+              </label>
+              <p className="mb-2 text-xs" style={{ color: 'var(--stone)' }}>
+                El crédito vence a los N días corridos desde que se genera. Máximo 30 días.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  name="recoveryDays"
+                  defaultValue={settings.recoveryDays}
+                  min={1}
+                  max={30}
+                  className="w-20 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+                  style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+                />
+                <span className="text-sm" style={{ color: 'var(--stone)' }}>días corridos</span>
               </div>
             </div>
           </div>

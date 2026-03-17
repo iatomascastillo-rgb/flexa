@@ -33,6 +33,58 @@ export default async function StudioLayout({
     auth(),
   ])
   const role = session?.user?.role ?? 'STUDENT'
+
+  // Para instructores: calcular sesiones pasadas con asistencia pendiente
+  let instructorPending = 0
+  if (role === 'INSTRUCTOR' && tenant) {
+    try {
+      const now = new Date()
+      const arMs = now.getTime() + -3 * 60 * 60_000
+      const ar = new Date(arMs)
+      const todayUTC = new Date(Date.UTC(ar.getUTCFullYear(), ar.getUTCMonth(), ar.getUTCDate()))
+      const yesterdayUTC = new Date(todayUTC.getTime() - 86_400_000)
+      const nowMin = ar.getUTCHours() * 60 + ar.getUTCMinutes()
+
+      // Sesiones de ayer + hoy (hasta hora actual -30min)
+      const pastSessions = await prisma.classSession.findMany({
+        where: {
+          studioId: tenant.studioId,
+          cancelledAt: null,
+          date: { gte: yesterdayUTC, lte: todayUTC },
+        },
+        select: { id: true, date: true, time: true },
+      })
+
+      const pastIds = pastSessions
+        .filter((s) => {
+          const isYesterday = s.date.getTime() === yesterdayUTC.getTime()
+          const isToday = s.date.getTime() === todayUTC.getTime()
+          const [h, m] = s.time.split(':').map(Number)
+          const sessionMin = h * 60 + m
+          return isYesterday || (isToday && sessionMin < nowMin - 30)
+        })
+        .map((s) => s.id)
+
+      if (pastIds.length > 0) {
+        // Contar bookings confirmadas sin attendanceStatus por sesión
+        const unregistered = await prisma.booking.groupBy({
+          by: ['classSessionId'],
+          where: {
+            studioId: tenant.studioId,
+            classSessionId: { in: pastIds },
+            status: 'CONFIRMED',
+            attendanceStatus: null,
+          },
+          _count: { id: true },
+          having: { id: { _count: { gt: 0 } } },
+        })
+        instructorPending = unregistered.length // cantidad de sesiones con pendientes
+      }
+    } catch {
+      // No bloquear el layout si falla
+    }
+  }
+
   const branding = tenant
     ? await prisma.studioBranding.findUnique({
         where: { studioId: tenant.studioId },
@@ -64,7 +116,7 @@ export default async function StudioLayout({
       >
         {children}
       </main>
-      <BottomNav studio={studio} role={role} />
+      <BottomNav studio={studio} role={role} pendingCount={instructorPending} />
     </div>
   )
 }

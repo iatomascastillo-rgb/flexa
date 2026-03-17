@@ -1,7 +1,10 @@
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
+import { revalidatePath } from 'next/cache'
+import bcrypt from 'bcryptjs'
 import { auth, signOut } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
+import { prisma } from '@/lib/prisma'
 
 // logoutAction se define dentro del Page para capturar el studio slug
 
@@ -35,14 +38,64 @@ function NavCard({ href, icon, label }: { href: string; icon: React.ReactNode; l
 
 export default async function PerfilPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ studio: string }>
+  searchParams: Promise<{ saved?: string; error?: string }>
 }) {
-  const { studio } = await params
+  const [{ studio }, sp] = await Promise.all([params, searchParams])
 
   async function logoutAction() {
     'use server'
     await signOut({ redirectTo: `/login?callbackUrl=/${studio}/perfil` })
+  }
+
+  async function updateProfileAction(formData: FormData) {
+    'use server'
+    const s = await auth()
+    if (!s?.user?.id) return
+    const name = (formData.get('name') as string)?.trim()
+    const phone = (formData.get('phone') as string)?.trim() || null
+    if (!name) redirect(`/${studio}/perfil?error=nombre`)
+    const tenant = await getTenantBySlug(studio)
+    if (!tenant || s.user.studioId !== tenant.studioId) return
+    await prisma.user.update({
+      where: { id: s.user.id, studioId: tenant.studioId },
+      data: { name, phone },
+    })
+    revalidatePath(`/${studio}/perfil`)
+    redirect(`/${studio}/perfil?saved=perfil`)
+  }
+
+  async function changePasswordAction(formData: FormData) {
+    'use server'
+    const s = await auth()
+    if (!s?.user?.id) return
+    const currentPassword = formData.get('currentPassword') as string
+    const newPassword = formData.get('newPassword') as string
+    const confirmPassword = formData.get('confirmPassword') as string
+    if (!currentPassword || !newPassword || newPassword.length < 8) {
+      redirect(`/${studio}/perfil?error=password-corta`)
+    }
+    if (newPassword !== confirmPassword) {
+      redirect(`/${studio}/perfil?error=password-mismatch`)
+    }
+    const tenant = await getTenantBySlug(studio)
+    if (!tenant || s.user.studioId !== tenant.studioId) return
+    const user = await prisma.user.findUnique({
+      where: { id: s.user.id, studioId: tenant.studioId },
+      select: { passwordHash: true },
+    })
+    if (!user?.passwordHash) redirect(`/${studio}/perfil?error=password-actual`)
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!valid) redirect(`/${studio}/perfil?error=password-actual`)
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    await prisma.user.update({
+      where: { id: s.user.id, studioId: tenant.studioId },
+      data: { passwordHash },
+    })
+    revalidatePath(`/${studio}/perfil`)
+    redirect(`/${studio}/perfil?saved=password`)
   }
 
   const session = await auth()
@@ -53,16 +106,34 @@ export default async function PerfilPage({
 
   if (session.user.studioId !== tenant.studioId) redirect(`/login?callbackUrl=/${studio}/perfil`)
 
-  const user = session.user
+  // Leer datos frescos de DB (la sesión puede estar desactualizada)
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id, studioId: tenant.studioId },
+    select: { name: true, email: true, phone: true, role: true },
+  })
+
+  const user = dbUser ?? session.user
   const isSuperAdmin = user.role === 'SUPER_ADMIN'
   const isStudioAdmin = user.role === 'STUDIO_ADMIN'
+  const isInstructor = user.role === 'INSTRUCTOR'
   const initial = user.name?.charAt(0).toUpperCase() ?? '?'
 
   const roleLabel: Record<string, string> = {
     STUDENT: 'Alumna',
     STUDIO_ADMIN: 'Administradora',
     SUPER_ADMIN: 'Super Admin',
+    INSTRUCTOR: 'Instructora',
   }
+
+  const savedPerfil = sp.saved === 'perfil'
+  const savedPassword = sp.saved === 'password'
+  const errorMsg: Record<string, string> = {
+    'nombre': 'El nombre no puede estar vacío.',
+    'password-corta': 'La nueva contraseña debe tener al menos 8 caracteres.',
+    'password-mismatch': 'Las contraseñas no coinciden.',
+    'password-actual': 'La contraseña actual es incorrecta.',
+  }
+  const currentError = sp.error ? (errorMsg[sp.error] ?? 'Ocurrió un error.') : null
 
   return (
     <div className="mx-auto max-w-md px-4 pt-8 pb-24">
@@ -92,6 +163,26 @@ export default async function PerfilPage({
           </span>
         </div>
       </div>
+
+      {/* ── INSTRUCTOR: panel de clases ── */}
+      {isInstructor && (
+        <div className="mb-4 space-y-2">
+          <p className="mb-1 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+            Gestión
+          </p>
+          <NavCard
+            href={`/${studio}/instructor`}
+            label="Gestión de clases"
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" />
+              </svg>
+            }
+          />
+        </div>
+      )}
 
       {/* ── SUPER_ADMIN: acceso directo al panel ── */}
       {isSuperAdmin && (
@@ -197,6 +288,16 @@ export default async function PerfilPage({
             }
           />
           <NavCard
+            href={`/${studio}/admin/settings/mercadopago`}
+            label="MercadoPago"
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="20" height="14" x="2" y="5" rx="2" />
+                <line x1="2" x2="22" y1="10" y2="10" />
+              </svg>
+            }
+          />
+          <NavCard
             href={`/${studio}/admin/settings/politicas`}
             label="Políticas"
             icon={
@@ -220,8 +321,152 @@ export default async function PerfilPage({
               </svg>
             }
           />
+
+          {/* Link de registro para compartir */}
+          {(() => {
+            const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '')
+            const registerUrl = appUrl ? `${appUrl}/${studio}/unirse` : `/${studio}/unirse`
+            return (
+              <div
+                className="rounded-2xl px-4 py-4"
+                style={{ background: '#F0F7F0', border: '1px solid var(--sage)' }}
+              >
+                <p className="mb-1 text-xs font-medium" style={{ color: 'var(--sage)' }}>
+                  Link de registro para alumnas
+                </p>
+                <p className="mb-2 text-xs" style={{ color: 'var(--stone)' }}>
+                  Compartí este link para que nuevas alumnas puedan registrarse:
+                </p>
+                <a
+                  href={`/${studio}/unirse`}
+                  className="block truncate rounded-xl border px-3 py-2 font-mono text-xs"
+                  style={{ borderColor: '#C8DFC8', background: 'white', color: 'var(--sage)' }}
+                >
+                  {registerUrl}
+                </a>
+              </div>
+            )
+          })()}
         </div>
       )}
+
+      {/* ── Editar datos personales ── */}
+      <div className="mb-4">
+        <p className="mb-2 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+          Mis datos
+        </p>
+
+        {/* Feedback */}
+        {savedPerfil && (
+          <div className="mb-3 rounded-2xl px-4 py-3 text-sm" style={{ background: '#EDF4ED', color: 'var(--sage)', border: '1px solid var(--sage)' }}>
+            Datos actualizados correctamente.
+          </div>
+        )}
+        {savedPassword && (
+          <div className="mb-3 rounded-2xl px-4 py-3 text-sm" style={{ background: '#EDF4ED', color: 'var(--sage)', border: '1px solid var(--sage)' }}>
+            Contraseña actualizada correctamente.
+          </div>
+        )}
+        {currentError && (
+          <div className="mb-3 rounded-2xl px-4 py-3 text-sm" style={{ background: '#FEF3EE', color: 'var(--terracotta)', border: '1px solid var(--terracotta)' }}>
+            {currentError}
+          </div>
+        )}
+
+        {/* Formulario datos */}
+        <div className="mb-3 rounded-2xl px-5 py-5" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+          <form action={updateProfileAction} className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>
+                Nombre completo
+              </label>
+              <input
+                type="text"
+                name="name"
+                required
+                defaultValue={user.name ?? ''}
+                className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sage)]"
+                style={{ borderColor: '#E8E0D6', background: '#FAFAF9', color: 'var(--ink)' }}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>
+                Teléfono (opcional)
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                defaultValue={(user as { phone?: string | null }).phone ?? ''}
+                placeholder="+54 9 11 1234-5678"
+                className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sage)]"
+                style={{ borderColor: '#E8E0D6', background: '#FAFAF9', color: 'var(--ink)' }}
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full rounded-xl py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85"
+              style={{ background: 'var(--sage)' }}
+            >
+              Guardar cambios
+            </button>
+          </form>
+        </div>
+
+        {/* Cambiar contraseña */}
+        <div className="rounded-2xl px-5 py-5" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+          <p className="mb-3 text-sm font-medium" style={{ color: 'var(--ink)' }}>Cambiar contraseña</p>
+          <form action={changePasswordAction} className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>
+                Contraseña actual
+              </label>
+              <input
+                type="password"
+                name="currentPassword"
+                required
+                placeholder="••••••••"
+                className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sage)]"
+                style={{ borderColor: '#E8E0D6', background: '#FAFAF9', color: 'var(--ink)' }}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>
+                Nueva contraseña (mín. 8)
+              </label>
+              <input
+                type="password"
+                name="newPassword"
+                required
+                minLength={8}
+                placeholder="••••••••"
+                className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sage)]"
+                style={{ borderColor: '#E8E0D6', background: '#FAFAF9', color: 'var(--ink)' }}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>
+                Confirmar nueva contraseña
+              </label>
+              <input
+                type="password"
+                name="confirmPassword"
+                required
+                minLength={8}
+                placeholder="••••••••"
+                className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sage)]"
+                style={{ borderColor: '#E8E0D6', background: '#FAFAF9', color: 'var(--ink)' }}
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full rounded-xl py-2.5 text-sm font-medium transition-opacity hover:opacity-80"
+              style={{ background: '#EDF4ED', color: 'var(--sage)', border: '1px solid var(--sage)' }}
+            >
+              Cambiar contraseña
+            </button>
+          </form>
+        </div>
+      </div>
 
       {/* Cerrar sesión */}
       <div className="space-y-2">

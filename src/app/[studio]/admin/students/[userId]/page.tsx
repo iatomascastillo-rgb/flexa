@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
 import { adminAdjustCredits } from '@/services/credit.service'
+import { sendEmail } from '@/lib/email'
 
 // ── Server Actions ─────────────────────────────────────────────────────────────
 
@@ -57,10 +58,20 @@ async function assignPackageAction(formData: FormData) {
   if (!tenant || tenant.studioId !== session.user.studioId) return
   if (!['CASH', 'TRANSFER'].includes(paymentMethod)) return
 
-  const pkg = await prisma.package.findUnique({
-    where: { id: packageId, studioId: tenant.studioId, active: true },
-    select: { classCount: true, name: true },
-  })
+  const [pkg, student, studioData] = await Promise.all([
+    prisma.package.findUnique({
+      where: { id: packageId, studioId: tenant.studioId, active: true },
+      select: { classCount: true, name: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: studentUserId, studioId: tenant.studioId },
+      select: { email: true, name: true },
+    }),
+    prisma.studio.findUnique({
+      where: { id: tenant.studioId },
+      select: { name: true },
+    }),
+  ])
   if (!pkg) return
 
   const now = new Date()
@@ -107,6 +118,65 @@ async function assignPackageAction(formData: FormData) {
       },
     })
   })
+
+  // Email al alumno — fuera de la transacción
+  try {
+    if (student && studioData) {
+      await sendEmail(student.email, 'pago-aprobado', {
+        studentName: student.name ?? 'Alumna',
+        packageName: pkg.name,
+        classesTotal: pkg.classCount,
+        expiresAt: expiresAt.toLocaleDateString('es-AR', {
+          day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires',
+        }),
+        studioName: studioData.name,
+      })
+    }
+  } catch (emailErr) {
+    console.error('[assignPackage] Error enviando email:', emailErr)
+  }
+
+  revalidatePath(`/${studio}/admin/students/${studentUserId}`)
+}
+
+async function changeRoleAction(formData: FormData) {
+  'use server'
+  const studio = formData.get('studio') as string
+  const studentUserId = formData.get('studentUserId') as string
+  const newRole = formData.get('newRole') as string
+
+  if (!['STUDENT', 'INSTRUCTOR'].includes(newRole)) return
+
+  const session = await auth()
+  if (!session?.user?.id) return
+  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
+
+  const tenant = await getTenantBySlug(studio)
+  if (!tenant || tenant.studioId !== session.user.studioId) return
+
+  const target = await prisma.user.findUnique({
+    where: { id: studentUserId, studioId: tenant.studioId },
+    select: { role: true },
+  })
+  if (!target) return
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: studentUserId, studioId: tenant.studioId },
+      data: { role: newRole as 'STUDENT' | 'INSTRUCTOR' },
+    }),
+    prisma.auditLog.create({
+      data: {
+        studioId: tenant.studioId,
+        userId: session.user.id,
+        action: 'USER_ROLE_CHANGED',
+        entityType: 'User',
+        entityId: studentUserId,
+        before: { role: target.role },
+        after: { role: newRole },
+      },
+    }),
+  ])
 
   revalidatePath(`/${studio}/admin/students/${studentUserId}`)
 }
@@ -199,6 +269,7 @@ export default async function AdminStudentPage({
         email: true,
         phone: true,
         active: true,
+        role: true,
         studioId: true,
         createdAt: true,
       },
@@ -479,6 +550,48 @@ export default async function AdminStudentPage({
           </form>
         </section>
       )}
+
+      {/* ── Rol ── */}
+      <section
+        className="mb-5 rounded-2xl px-5 py-4"
+        style={{ background: 'white', border: '1px solid #E8E0D6' }}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
+              Rol:{' '}
+              <span style={{ color: student.role === 'INSTRUCTOR' ? 'var(--sage)' : 'var(--stone)' }}>
+                {student.role === 'INSTRUCTOR' ? 'Instructor' : 'Alumno'}
+              </span>
+            </p>
+            <p className="text-xs" style={{ color: 'var(--stone)' }}>
+              {student.role === 'INSTRUCTOR'
+                ? 'Puede ver sesiones y registrar asistencia.'
+                : 'Puede reservar clases y ver su historial.'}
+            </p>
+          </div>
+          <form action={changeRoleAction}>
+            <input type="hidden" name="studio" value={studio} />
+            <input type="hidden" name="studentUserId" value={userId} />
+            <input
+              type="hidden"
+              name="newRole"
+              value={student.role === 'INSTRUCTOR' ? 'STUDENT' : 'INSTRUCTOR'}
+            />
+            <button
+              type="submit"
+              className="rounded-xl px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+              style={
+                student.role === 'INSTRUCTOR'
+                  ? { background: 'var(--terracotta-light)', color: 'var(--terracotta)', border: '1px solid var(--terracotta)' }
+                  : { background: '#EDF4ED', color: 'var(--sage)', border: '1px solid var(--sage)' }
+              }
+            >
+              {student.role === 'INSTRUCTOR' ? 'Convertir en alumno' : 'Promover a instructor'}
+            </button>
+          </form>
+        </div>
+      </section>
 
       {/* ── Asignar créditos ── */}
       <section

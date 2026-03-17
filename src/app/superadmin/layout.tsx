@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
+import { LogoutButton } from './LogoutButton'
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -29,8 +30,9 @@ export default async function SuperAdminLayout({ children }: { children: React.R
               </Link>
             ))}
           </div>
-          <div style={{ marginLeft: 'auto', fontSize: '12px', color: '#555' }}>
-            {session.user.email}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '12px', color: '#555' }}>{session.user.email}</span>
+            <LogoutButton />
           </div>
         </div>
       </nav>

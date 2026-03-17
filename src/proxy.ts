@@ -35,6 +35,20 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // ── /[studio]/instructor/* → INSTRUCTOR, STUDIO_ADMIN o SUPER_ADMIN ──────
+  const instructorMatch = /^\/([^/]+)\/instructor(\/|$)/.exec(pathname)
+  if (instructorMatch) {
+    if (!token) {
+      const url = new URL('/login', req.url)
+      url.searchParams.set('callbackUrl', pathname)
+      return NextResponse.redirect(url)
+    }
+    if (token.role !== 'INSTRUCTOR' && token.role !== 'STUDIO_ADMIN' && token.role !== 'SUPER_ADMIN') {
+      return NextResponse.redirect(new URL(`/${instructorMatch[1]}`, req.url))
+    }
+    return NextResponse.next()
+  }
+
   return NextResponse.next()
 }
 

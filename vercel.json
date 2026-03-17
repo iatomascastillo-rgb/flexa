@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/billing",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/generate-month",
+      "schedule": "0 12 25 * *"
+    },
+    {
+      "path": "/api/cron/grace-cutoff",
+      "schedule": "0 12 10 * *"
+    },
+    {
+      "path": "/api/cron/monthly-summary",
+      "schedule": "0 13 1 * *"
+    }
+  ]
+}

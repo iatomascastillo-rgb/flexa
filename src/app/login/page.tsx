@@ -53,16 +53,19 @@ function LoginForm() {
     >
       <div className="w-full max-w-sm">
         {/* Logo / título */}
-        <div className="mb-8 text-center">
-          <h1
-            className="text-4xl font-light"
-            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
-          >
-            Flexa
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--stone)' }}>
-            Ingresá a tu estudio
-          </p>
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <img src="/flexa-logo.svg" alt="Flexa" className="h-16 w-16" />
+          <div className="text-center">
+            <h1
+              className="text-3xl font-light"
+              style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
+            >
+              Flexa
+            </h1>
+            <p className="mt-0.5 text-sm" style={{ color: 'var(--stone)' }}>
+              Ingresá a tu estudio
+            </p>
+          </div>
         </div>
 
         <form
@@ -155,6 +158,15 @@ function LoginForm() {
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>
+
+        {slug && (
+          <p className="mt-5 text-center text-sm" style={{ color: 'var(--stone)' }}>
+            ¿Sos nueva?{' '}
+            <a href={`/${slug}/unirse`} className="font-medium" style={{ color: 'var(--sage)' }}>
+              Registrate acá
+            </a>
+          </p>
+        )}
       </div>
     </div>
   )

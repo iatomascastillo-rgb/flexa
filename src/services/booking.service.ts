@@ -7,6 +7,61 @@ import type { BookingOrigin } from '@prisma/client'
 
 type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
 
+// ── createRecoveryPackageTx ────────────────────────────────────────────────
+/**
+ * Crea un UserPackage de recuperación con 1 crédito y vencimiento en N días.
+ * Llamar solo dentro de una transacción, cuando recoveryEnabled = true
+ * y el alumno acaba de perder un crédito (no-show o cancelación tardía).
+ */
+async function createRecoveryPackageTx(
+  tx: TxClient,
+  params: {
+    studioId: string
+    userId: string
+    recoveryDays: number
+    bookingId: string
+  },
+): Promise<void> {
+  const { studioId, userId, recoveryDays, bookingId } = params
+  const now = new Date()
+  // "Fin del día N en Argentina" = día N+1 a las 02:59:59 UTC (UTC-3)
+  const base = new Date(now.getTime() + recoveryDays * 24 * 60 * 60 * 1000)
+  const expiresAt = new Date(Date.UTC(
+    base.getUTCFullYear(),
+    base.getUTCMonth(),
+    base.getUTCDate() + 1, // +1 en UTC = fin del día AR anterior
+    2, 59, 59, 999,
+  ))
+
+  const recoveryPackage = await tx.userPackage.create({
+    data: {
+      studioId,
+      userId,
+      packageId: null,
+      paymentStatus: 'APPROVED',
+      paymentMethod: 'ADMIN_GRANT',
+      classesTotal: 1,
+      classesRemaining: 1,
+      expiresAt,
+      activatedAt: now,
+      isRecovery: true,
+    },
+    select: { id: true },
+  })
+
+  await tx.creditTransaction.create({
+    data: {
+      studioId,
+      userPackageId: recoveryPackage.id,
+      type: 'RECOVERY_CREDIT',
+      amount: 1,
+      balanceAfter: 1,
+      bookingId,
+      note: `Recuperación automática — ${recoveryDays} días`,
+    },
+  })
+}
+
 interface CreateBookingParams {
   userId: string
   studioId: string
@@ -364,6 +419,20 @@ export async function cancelBooking({
       })
     }
 
+    // ── Recovery credit por cancelación tardía ─────────────────────────
+    // Si el crédito se perdió (no refund), hay paquete original y el estudio
+    // tiene recovery habilitado → generar crédito de recuperación.
+    const creditLostOnLateCancellation =
+      !shouldRefund && isLate && booking.userPackageId !== null
+    if (creditLostOnLateCancellation && settings.recoveryEnabled) {
+      await createRecoveryPackageTx(tx, {
+        studioId,
+        userId: booking.userId,
+        recoveryDays: settings.recoveryDays,
+        bookingId,
+      })
+    }
+
     let promoted: { userId: string; isGrace: boolean } | null = null
     let skippedUsers: string[] = []
 
@@ -407,6 +476,11 @@ export async function cancelBooking({
     })
 
     if (booking) {
+      const date = booking.classSession.date.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
+      const className = booking.classSession.classType.name
+      const time = booking.classSession.time
+
+      // Email al alumno que canceló
       const user = await prisma.user.findUnique({
         where: { id: booking.userId },
         select: { email: true, name: true },
@@ -423,15 +497,30 @@ export async function cancelBooking({
       }
 
       if (user) {
-        const date = booking.classSession.date.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
         await sendEmail(user.email, 'cancelacion-reserva', {
           studentName: user.name ?? 'Alumna',
-          className: booking.classSession.classType.name,
+          className,
           date,
-          time: booking.classSession.time,
+          time,
           creditRefunded: result.creditRefunded,
           creditsRemaining,
         })
+      }
+
+      // Email al alumno promovido desde lista de espera
+      if (result.promoted) {
+        const promotedUser = await prisma.user.findUnique({
+          where: { id: result.promoted.userId },
+          select: { email: true, name: true },
+        })
+        if (promotedUser) {
+          await sendEmail(promotedUser.email, 'lista-de-espera-promovida', {
+            studentName: promotedUser.name ?? 'Alumna',
+            className,
+            date,
+            time,
+          })
+        }
       }
     }
   } catch (err) {
@@ -551,8 +640,27 @@ export async function promoteFromWaitlist(
   })
 
   try {
-    // TODO: if (result.promoted) sendNotification WAITLIST_PROMOTED
-    // TODO: for (userId of result.skipped) sendNotification PACKAGE_RENEWAL_NEEDED
+    if (result.promoted) {
+      const [promotedUser, session] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: result.promoted.userId },
+          select: { email: true, name: true },
+        }),
+        prisma.classSession.findUnique({
+          where: { id: classSessionId },
+          include: { classType: { select: { name: true } } },
+        }),
+      ])
+      if (promotedUser && session) {
+        const date = session.date.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
+        await sendEmail(promotedUser.email, 'lista-de-espera-promovida', {
+          studentName: promotedUser.name ?? 'Alumna',
+          className: session.classType.name,
+          date,
+          time: session.time,
+        })
+      }
+    }
   } catch (err) {
     console.error('[promoteFromWaitlist] Error enviando notificaciones:', err)
   }
@@ -586,6 +694,26 @@ export async function cancelSession({
   studioId,
   cancelledByUserId,
 }: CancelSessionParams): Promise<CancelSessionResult> {
+  // Pre-query para notificaciones post-cancelación (fuera de la transacción)
+  const [affectedForNotif, sessionForNotif] = await Promise.all([
+    prisma.booking.findMany({
+      where: { classSessionId, studioId, status: { in: ['CONFIRMED', 'WAITLIST'] } },
+      select: {
+        status: true,
+        userPackageId: true,
+        user: { select: { email: true, name: true } },
+      },
+    }),
+    prisma.classSession.findUnique({
+      where: { id: classSessionId },
+      select: {
+        date: true, time: true,
+        classType: { select: { name: true } },
+        studio: { select: { name: true } },
+      },
+    }),
+  ])
+
   const result = await prisma.$transaction(async (tx) => {
     // PRE: verificar que la sesión pertenece al estudio
     const session = await tx.classSession.findUnique({
@@ -703,7 +831,23 @@ export async function cancelSession({
 
   // POST-TRANSACCIÓN: notificar a todos los afectados
   try {
-    // TODO: sendNotification CLASS_CANCELLED para CONFIRMED + WAITLIST
+    if (sessionForNotif && affectedForNotif.length > 0) {
+      const date = sessionForNotif.date.toLocaleDateString('es-AR', {
+        weekday: 'long', day: 'numeric', month: 'long',
+      })
+      await Promise.all(
+        affectedForNotif.map((booking) =>
+          sendEmail(booking.user.email, 'clase-cancelada-alumna', {
+            studentName: booking.user.name ?? 'Alumna',
+            className: sessionForNotif.classType.name,
+            studioName: sessionForNotif.studio.name,
+            date,
+            time: sessionForNotif.time,
+            creditsRefunded: booking.status === 'CONFIRMED' && booking.userPackageId !== null,
+          })
+        )
+      )
+    }
   } catch (err) {
     console.error('[cancelSession] Error enviando notificaciones:', err)
   }

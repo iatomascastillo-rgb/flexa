@@ -1,8 +1,39 @@
 import { notFound, redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
+
+// ── Server Actions ─────────────────────────────────────────────────────────────
+
+async function createSessionAction(formData: FormData) {
+  'use server'
+  const studio = formData.get('studio') as string
+  const classTypeId = formData.get('classTypeId') as string
+  const dateStr = formData.get('date') as string   // "YYYY-MM-DD"
+  const time = formData.get('time') as string      // "HH:mm"
+
+  if (!classTypeId || !dateStr || !time) return
+
+  const session = await auth()
+  if (!session?.user?.id) return
+  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
+
+  const tenant = await getTenantBySlug(studio)
+  if (!tenant || session.user.studioId !== tenant.studioId) return
+
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d))
+
+  await prisma.classSession.upsert({
+    where: { studioId_date_time_classTypeId: { studioId: tenant.studioId, date, time, classTypeId } },
+    update: {},
+    create: { studioId: tenant.studioId, classTypeId, date, time },
+  })
+
+  revalidatePath(`/${studio}/admin/sesiones`)
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -11,7 +42,7 @@ function fmtDateHeader(date: Date): string {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: 'UTC',
   })
 }
 
@@ -60,6 +91,13 @@ export default async function AdminSesionesPage({
   const days = rangeDays[rango] ?? 7
   const rangeEnd = new Date(todayStart.getTime() + days * 24 * 60 * 60 * 1000)
 
+  // ── Fetch classTypes y sesiones ────────────────────────────────────────────
+  const classTypes = await prisma.classType.findMany({
+    where: { studioId, active: true },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
+
   // ── Fetch sesiones ─────────────────────────────────────────────────────────
   const rawSessions = await prisma.classSession.findMany({
     where: {
@@ -102,22 +140,34 @@ export default async function AdminSesionesPage({
   return (
     <div className="mx-auto max-w-md px-4 pt-8">
       {/* Header */}
-      <div className="mb-6 flex items-center gap-4">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link
+            href={`/${studio}/perfil`}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-70"
+            style={{ background: 'white', color: 'var(--ink)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </Link>
+          <h1
+            className="text-3xl font-light"
+            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
+          >
+            Sesiones
+          </h1>
+        </div>
         <Link
-          href={`/${studio}/perfil`}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-70"
-          style={{ background: 'white', color: 'var(--ink)' }}
+          href={`/${studio}/admin/clases`}
+          className="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium transition-opacity hover:opacity-80"
+          style={{ background: 'var(--sage)', color: 'white' }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m15 18-6-6 6-6" />
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14" /><path d="M5 12h14" />
           </svg>
+          Agregar horarios
         </Link>
-        <h1
-          className="text-3xl font-light"
-          style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
-        >
-          Sesiones
-        </h1>
       </div>
 
       {/* Filtro de rango */}
@@ -141,10 +191,20 @@ export default async function AdminSesionesPage({
       {/* Sin sesiones */}
       {dateKeys.length === 0 && (
         <div
-          className="rounded-2xl p-8 text-center"
-          style={{ background: 'white', color: 'var(--stone)' }}
+          className="rounded-2xl px-5 py-8 text-center"
+          style={{ background: 'white', border: '1px solid #E8E0D6' }}
         >
-          <p className="text-sm">No hay sesiones para este período.</p>
+          <p className="mb-4 text-sm" style={{ color: 'var(--stone)' }}>No hay sesiones para este período.</p>
+          <Link
+            href={`/${studio}/admin/clases`}
+            className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium transition-opacity hover:opacity-80"
+            style={{ background: 'var(--sage)', color: 'white' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14" /><path d="M5 12h14" />
+            </svg>
+            Agregar horarios
+          </Link>
         </div>
       )}
 
@@ -225,6 +285,60 @@ export default async function AdminSesionesPage({
           )
         })}
       </div>
+
+      {/* ── Crear sesión puntual ── */}
+      {classTypes.length > 0 && (
+        <div className="mt-8 mb-24 rounded-2xl p-5" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+          <p className="mb-4 text-sm font-medium" style={{ color: 'var(--ink)' }}>Crear sesión puntual</p>
+          <form action={createSessionAction} className="space-y-3">
+            <input type="hidden" name="studio" value={studio} />
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Tipo de clase</label>
+              <select
+                name="classTypeId"
+                required
+                className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+                style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+              >
+                {classTypes.map((ct) => (
+                  <option key={ct.id} value={ct.id}>{ct.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Fecha</label>
+                <input
+                  type="date"
+                  name="date"
+                  required
+                  defaultValue={todayStart.toISOString().slice(0, 10)}
+                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+                  style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Horario</label>
+                <input
+                  type="time"
+                  name="time"
+                  required
+                  defaultValue="10:00"
+                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+                  style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="w-full rounded-xl py-2.5 text-sm font-medium transition-opacity hover:opacity-80"
+              style={{ background: 'var(--sage)', color: 'white' }}
+            >
+              Crear sesión
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   )
 }

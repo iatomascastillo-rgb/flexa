@@ -170,6 +170,37 @@ async function extendTrialAction(formData: FormData) {
   revalidatePath(`/superadmin/estudios/${studioId}`)
 }
 
+async function setAiInsightTrialAction(formData: FormData) {
+  'use server'
+  const studioId = formData.get('studioId') as string
+  const daysRaw = parseInt(formData.get('days') as string) || 30
+  const days = Math.min(90, Math.max(0, daysRaw))
+
+  const session = await auth()
+  if (session?.user?.role !== 'SUPER_ADMIN') return
+
+  // days = 0 → revocar trial; days > 0 → setear desde hoy
+  const aiInsightTrialEndsAt = days > 0
+    ? new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+    : null
+
+  await prisma.$transaction([
+    prisma.subscription.update({
+      where: { studioId },
+      data: { aiInsightTrialEndsAt },
+    }),
+    prisma.platformEvent.create({
+      data: {
+        studioId,
+        type: 'AI_INSIGHT_TRIAL_SET',
+        data: { by: session.user.id, days, aiInsightTrialEndsAt },
+      },
+    }),
+  ])
+
+  revalidatePath(`/superadmin/estudios/${studioId}`)
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function fmtDate(d: Date | null | undefined): string {
@@ -288,6 +319,14 @@ export default async function SuperAdminStudioDetailPage({
                 { label: 'Estado', value: sub.status },
                 { label: 'Trial vence', value: fmtDate(sub.trialEndsAt) },
                 { label: 'Período actual', value: sub.currentPeriodStart ? `${fmtDateShort(sub.currentPeriodStart)} → ${fmtDate(sub.currentPeriodEnd)}` : '—' },
+                {
+                  label: 'Trial IA',
+                  value: sub.plan === 'PRO'
+                    ? 'PRO (permanente)'
+                    : sub.aiInsightTrialEndsAt
+                      ? (sub.aiInsightTrialEndsAt > new Date() ? `activo hasta ${fmtDate(sub.aiInsightTrialEndsAt)}` : `vencido ${fmtDate(sub.aiInsightTrialEndsAt)}`)
+                      : 'no activo',
+                },
                 { label: 'Actualizado', value: fmtDateShort(sub.updatedAt) },
               ].map(({ label, value }) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
@@ -395,7 +434,29 @@ export default async function SuperAdminStudioDetailPage({
             </form>
           )}
 
-          {!isSuspendable && !isReactivatable && !isExtendable && (
+          {/* Trial IA — disponible para plan BASICO */}
+          {sub && sub.plan === 'BASICO' && (
+            <form action={setAiInsightTrialAction} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input type="hidden" name="studioId" value={studioId} />
+              <input
+                type="number"
+                name="days"
+                defaultValue={30}
+                min={0}
+                max={90}
+                style={{ width: '60px', padding: '7px 10px', borderRadius: '8px', fontSize: '13px', background: '#111', border: '1px solid #2A2A2A', color: '#E8E8E8' }}
+              />
+              <span style={{ fontSize: '12px', color: '#555' }}>días (0 = revocar)</span>
+              <button
+                type="submit"
+                style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', background: '#1A1A2A', color: '#A0A0E8', border: '1px solid #A0A0E833' }}
+              >
+                Trial IA
+              </button>
+            </form>
+          )}
+
+          {!isSuspendable && !isReactivatable && !isExtendable && sub?.plan === 'PRO' && (
             <span style={{ fontSize: '13px', color: '#444' }}>No hay acciones disponibles para este estado.</span>
           )}
         </div>

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { sendEmail } from '@/lib/email'
 
 // ── POST /api/cron/grace-cutoff ───────────────────────────────────────────────
 //
@@ -126,8 +127,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // POST-PROCESAMIENTO: notificación al admin — fuera del bloque principal
       try {
         if (graceOnNoPay === 'KEEP_AND_ALERT' && alertUserIds.length > 0) {
-          // TODO: sendNotification GRACE_WARNING al admin del estudio con la lista de usuarios
-          // await sendEmail({ studioId: studio.id, type: 'GRACE_CUTOFF_ALERT', data: { alertUserIds } })
+          const [admin, studioData, affectedUsers] = await Promise.all([
+            prisma.user.findFirst({
+              where: { studioId: studio.id, role: 'STUDIO_ADMIN' },
+              select: { email: true, name: true },
+            }),
+            prisma.studio.findUnique({
+              where: { id: studio.id },
+              select: { name: true },
+            }),
+            prisma.user.findMany({
+              where: { id: { in: alertUserIds }, studioId: studio.id },
+              select: {
+                id: true,
+                name: true,
+                _count: { select: { bookings: { where: { status: 'CONFIRMED', userPackageId: null } } } },
+              },
+            }),
+          ])
+          if (admin && studioData) {
+            await sendEmail(admin.email, 'grace-cutoff-admin', {
+              adminName: admin.name ?? 'Admin',
+              studioName: studioData.name,
+              studentCount: alertUserIds.length,
+              students: affectedUsers.map((u) => ({
+                name: u.name,
+                bookingCount: u._count.bookings,
+              })),
+            })
+          }
         }
       } catch (notifErr) {
         console.error(`[cron/grace-cutoff] Error sending notification studio=${studio.id}:`, notifErr)

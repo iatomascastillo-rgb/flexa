@@ -81,11 +81,11 @@ function toUTCMs(date: Date, time: string): number {
 function fmtDayHeader(date: Date): { weekday: string; day: string } {
   const weekday = date.toLocaleDateString('es-AR', {
     weekday: 'short',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: 'UTC',
   }).replace('.', '')
   const day = date.toLocaleDateString('es-AR', {
     day: 'numeric',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: 'UTC',
   })
   return { weekday, day }
 }
@@ -159,7 +159,8 @@ export default async function ClasesPage({
         date: true,
         time: true,
         capacityOverride: true,
-        classType: { select: { name: true, defaultCapacity: true } },
+        classType: { select: { name: true, defaultCapacity: true, description: true } },
+        instructorName: true,
         bookings: {
           where: { status: { in: ['CONFIRMED', 'WAITLIST'] } },
           select: { status: true },
@@ -201,6 +202,8 @@ export default async function ClasesPage({
         time: s.time,
         sessionMs,
         className: s.classType.name,
+        description: s.classType.description ?? null,
+        instructorName: s.instructorName ?? null,
         capacity,
         confirmedCount,
         spotsLeft,
@@ -318,6 +321,8 @@ export default async function ClasesPage({
                         studio={studio}
                         time={fmtTime(s.time)}
                         className={s.className}
+                        description={s.description}
+                        instructorName={s.instructorName}
                         spotsLeft={s.spotsLeft}
                         capacity={s.capacity}
                         isBookable={s.isBookable}

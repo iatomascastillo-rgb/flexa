@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
@@ -50,13 +51,13 @@ function toUTCMs(date: Date, time: string): number {
   return Date.UTC(y, mo, d, h + 3, m, 0) // UTC-3 → +3hs
 }
 
-/** Formatea fecha en hora Argentina: "lun 14 abr" */
+/** Formatea fecha de sesión (campo @db.Date = medianoche UTC) */
 function fmtDate(date: Date): string {
   return date.toLocaleDateString('es-AR', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: 'UTC',
   })
 }
 
@@ -87,6 +88,9 @@ export default async function HomePage({
 
   if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}`)
 
+  // Instructores van directo a su panel
+  if (session.user.role === 'INSTRUCTOR') redirect(`/${studio}/instructor`)
+
   const tenant = await getTenantBySlug(studio)
   if (!tenant) notFound()
 
@@ -108,6 +112,7 @@ export default async function HomePage({
           classesRemaining: true,
           classesTotal: true,
           expiresAt: true,
+          isRecovery: true,
           package: { select: { name: true } },
         },
       }),
@@ -158,6 +163,8 @@ export default async function HomePage({
   // ── Calcular créditos ─────────────────────────────────────────────────────
   const totalCredits = creditPackages.reduce((sum, p) => sum + p.classesRemaining, 0)
   const primaryPkg = creditPackages[0] // FIFO: el que vence antes
+  // Créditos de recuperación activos (pueden ser varios)
+  const recoveryPackages = creditPackages.filter(p => p.isRecovery)
   const progressPct = primaryPkg
     ? Math.round((primaryPkg.classesRemaining / primaryPkg.classesTotal) * 100)
     : 0
@@ -226,9 +233,12 @@ export default async function HomePage({
         )}
 
         {totalCredits === 0 && (
-          <p className="mt-3 text-sm opacity-80">
+          <Link
+            href={`/${studio}/paquetes`}
+            className="mt-3 block text-sm opacity-80 hover:opacity-100 transition-opacity"
+          >
             No tenés créditos disponibles. Renovar paquete →
-          </p>
+          </Link>
         )}
       </section>
 
@@ -247,6 +257,28 @@ export default async function HomePage({
             </p>
             <p className="mt-0.5 text-xs" style={{ color: 'var(--stone)' }}>
               Renová tu paquete para mantener tus lugares.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* ── Alerta recuperación de crédito ── */}
+      {recoveryPackages.length > 0 && (
+        <section
+          className="mb-4 flex items-start gap-3 rounded-2xl p-4"
+          style={{ background: '#F0F7F4', borderLeft: '3px solid var(--sage)' }}
+        >
+          <span className="mt-0.5 text-lg">🔄</span>
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
+              {recoveryPackages.length === 1
+                ? 'Tenés 1 clase de recuperación disponible'
+                : `Tenés ${recoveryPackages.reduce((s, p) => s + p.classesRemaining, 0)} clases de recuperación disponibles`}
+            </p>
+            <p className="mt-0.5 text-xs" style={{ color: 'var(--stone)' }}>
+              {recoveryPackages.length === 1
+                ? `Vence el ${fmtExpiry(recoveryPackages[0]!.expiresAt)}. Reservá una clase antes de que expire.`
+                : `La más próxima vence el ${fmtExpiry(recoveryPackages[0]!.expiresAt)}.`}
             </p>
           </div>
         </section>

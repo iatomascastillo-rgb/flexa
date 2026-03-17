@@ -11,6 +11,7 @@ datasource db {
 enum Role {
   SUPER_ADMIN
   STUDIO_ADMIN
+  INSTRUCTOR
   STUDENT
 }
 
@@ -52,6 +53,7 @@ enum CreditTransactionType {
   PLAN_CHANGE_DEDUCT
   PLAN_CHANGE_TRANSFER
   ADMIN_ADJUSTMENT
+  RECOVERY_CREDIT
 }
 
 enum LateCancellationPolicy {
@@ -110,16 +112,18 @@ model Studio {
   branding           StudioBranding?
   subscription       Subscription?
   users              User[]
-  classTypes         ClassType[]
-  classSessions      ClassSession[]
-  packages           Package[]
-  userPackages       UserPackage[]
-  bookings           Booking[]
-  recurringSchedules RecurringSchedule[]
-  creditTransactions CreditTransaction[]
-  auditLogs          AuditLog[]
-  platformEvents     PlatformEvent[]
-  saasPayments       SaasPayment[]
+  classTypes              ClassType[]
+  classSessions           ClassSession[]
+  classScheduleTemplates  ClassScheduleTemplate[]
+  packages                Package[]
+  userPackages            UserPackage[]
+  bookings                Booking[]
+  recurringSchedules      RecurringSchedule[]
+  creditTransactions      CreditTransaction[]
+  auditLogs               AuditLog[]
+  platformEvents          PlatformEvent[]
+  saasPayments            SaasPayment[]
+  aiInsights              AiInsight[]
 
   @@map("studios")
 }
@@ -164,6 +168,14 @@ model StudioSettings {
   graceRequiresHistory  Boolean                @default(true)
   graceOnNoPay          GraceOnNoPay           @default(RELEASE_TO_WAITLIST)
 
+  /// Si está habilitado, cuando una alumna pierde un crédito (no-show o cancelación tardía)
+  /// se le genera automáticamente un crédito de recuperación con expiración en recoveryDays días.
+  recoveryEnabled       Boolean                @default(false)
+  recoveryDays          Int                    @default(7)
+
+  /// Access token de MercadoPago del estudio (token de producción del admin del estudio)
+  mpAccessToken         String?
+
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -198,6 +210,9 @@ model Subscription {
   trialEndsAt          DateTime?
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
+
+  /// Trial de IA insights para plan BASICO. Si plan = PRO, acceso permanente.
+  aiInsightTrialEndsAt DateTime?
 
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
@@ -248,8 +263,9 @@ model ClassType {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  classSessions      ClassSession[]
-  recurringSchedules RecurringSchedule[]
+  classSessions          ClassSession[]
+  recurringSchedules     RecurringSchedule[]
+  classScheduleTemplates ClassScheduleTemplate[]
 
   @@map("class_types")
 }
@@ -267,6 +283,8 @@ model ClassSession {
   time             String    // "HH:mm" — ej: "09:00"
   capacityOverride Int?      // null = usar classType.defaultCapacity
   cancelledAt      DateTime?
+  /// Nombre del instructor asignado (texto libre, puede diferir del template por suplencia)
+  instructorName   String?
 
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -321,6 +339,10 @@ model UserPackage {
   expiresAt       DateTime      // último día del mes a las 23:59:59
   activatedAt     DateTime?
 
+  /// true cuando este paquete fue generado automáticamente como crédito de recuperación
+  /// (por no-show o cancelación tardía con recoveryEnabled = true en StudioSettings)
+  isRecovery      Boolean       @default(false)
+
   /// userId del admin que aprobó (efectivo/transferencia/ajuste manual)
   approvedBy      String?
   approvedByUser  User?         @relation("ApprovedBy", fields: [approvedBy], references: [id])
@@ -370,6 +392,30 @@ model Booking {
   @@index([studioId, userPackageId])             // liquidación gracia + reportes
   @@index([studioId, userId, userPackageId])     // buscar reservas en gracia
   @@map("bookings")
+}
+
+/// Horario semanal fijo del estudio. El cron lo usa para generar ClassSessions mes a mes.
+/// Una entrada = "este estudio dicta X clase los Y a las HH:mm siempre".
+model ClassScheduleTemplate {
+  id          String    @id @default(cuid())
+  studioId    String
+  studio      Studio    @relation(fields: [studioId], references: [id])
+
+  classTypeId String
+  classType   ClassType @relation(fields: [classTypeId], references: [id])
+
+  dayOfWeek      DayOfWeek
+  time           String    // "HH:mm"
+  active         Boolean   @default(true)
+  /// Nombre del instructor por defecto para este horario (texto libre)
+  instructorName String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([studioId, classTypeId, dayOfWeek, time])
+  @@index([studioId, active])
+  @@map("class_schedule_templates")
 }
 
 /// Configuración de días fijos por alumno.
@@ -462,6 +508,23 @@ model PlatformEvent {
 
   @@index([studioId, createdAt])
   @@map("platform_events")
+}
+
+/// Respuestas de IA almacenadas para reutilización (TTL = 6h en servicio).
+/// Solo INSERT, nunca UPDATE — los registros viejos quedan como historial.
+model AiInsight {
+  id        String   @id @default(cuid())
+  studioId  String
+  studio    Studio   @relation(fields: [studioId], references: [id])
+
+  type      String   // "monthly_summary" | "churn_risk" | "schedule_optimization"
+  content   String   // respuesta de Claude (texto plano, sin HTML)
+  inputData Json     // métricas agregadas enviadas a Claude (sin PII, para auditoría)
+
+  createdAt DateTime @default(now())
+
+  @@index([studioId, type, createdAt])
+  @@map("ai_insights")
 }
 
 // -- MIGRATION: ALTER TABLE user_packages ADD CONSTRAINT classes_remaining_non_negative CHECK (classes_remaining >= 0);

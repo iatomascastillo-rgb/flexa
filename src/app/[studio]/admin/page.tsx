@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
 import { getMonthlyAdminMetrics } from '@/lib/cache'
+import { InsightCard } from '@/components/InsightCard'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ export default async function AdminDashboardPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const [{ studio }, sp] = await Promise.all([params, searchParams])
-  const tab = sp.tab === 'mensual' ? 'mensual' : 'dia'
+  const tab = sp.tab === 'mensual' ? 'mensual' : sp.tab === 'ia' ? 'ia' : 'dia'
 
   const session = await auth()
   if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/admin`)
@@ -259,6 +260,13 @@ export default async function AdminDashboardPage({
           style={tab === 'mensual' ? activeTab : inactiveTab}
         >
           Resumen mensual
+        </Link>
+        <Link
+          href={`/${studio}/admin?tab=ia`}
+          className="pb-2 text-sm transition-colors"
+          style={tab === 'ia' ? activeTab : inactiveTab}
+        >
+          IA
         </Link>
       </div>
 
@@ -518,6 +526,8 @@ export default async function AdminDashboardPage({
             <div className="grid grid-cols-2 gap-2">
               {[
                 { href: `/${studio}/admin/students`, label: 'Alumnos', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
+                { href: `/${studio}/admin/instructores`, label: 'Instructores', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" /></svg> },
+                { href: `/${studio}/admin/clases`, label: 'Gestionar clases', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14" /><path d="M5 12h14" /><rect width="18" height="18" x="3" y="3" rx="2" /></svg> },
                 { href: `/${studio}/admin/sesiones`, label: 'Sesiones', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg> },
                 { href: `/${studio}/admin/settings/branding`, label: 'Apariencia', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r="2.5" /><circle cx="6.5" cy="13.5" r="2.5" /><circle cx="17" cy="17" r="2.5" /><circle cx="3" cy="3" r="2" /></svg> },
                 { href: `/${studio}/admin/settings/politicas`, label: 'Políticas', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="4" y1="21" y2="14" /><line x1="4" x2="4" y1="10" y2="3" /><line x1="12" x2="12" y1="21" y2="12" /><line x1="12" x2="12" y1="8" y2="3" /><line x1="20" x2="20" y1="21" y2="16" /><line x1="20" x2="20" y1="12" y2="3" /><line x1="1" x2="7" y1="14" y2="14" /><line x1="9" x2="15" y1="8" y2="8" /><line x1="17" x2="23" y1="16" y2="16" /></svg> },
@@ -758,6 +768,38 @@ export default async function AdminDashboardPage({
               </div>
             </div>
           </section>
+        </>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          TAB: IA
+      ══════════════════════════════════════════════════════════════════════ */}
+      {tab === 'ia' && (
+        <>
+          <p className="mb-4 px-1 text-xs" style={{ color: 'var(--stone)' }}>
+            Análisis generados por IA a partir de los datos del estudio.
+            Cada análisis se actualiza como máximo cada 6 horas.
+          </p>
+          <div className="space-y-4">
+            <InsightCard
+              studio={studio}
+              type="monthly_summary"
+              title="Resumen mensual"
+              description="Ingresos, ocupación y retención de alumnos con recomendaciones para el próximo mes."
+            />
+            <InsightCard
+              studio={studio}
+              type="churn_risk"
+              title="Riesgo de abandono"
+              description="Alumnos que dejaron de reservar recientemente y acciones para reactivarlos."
+            />
+            <InsightCard
+              studio={studio}
+              type="schedule_optimization"
+              title="Optimización de horarios"
+              description="Horarios con baja demanda y oportunidades para agregar clases."
+            />
+          </div>
         </>
       )}
     </div>

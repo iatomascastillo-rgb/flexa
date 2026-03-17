@@ -7,7 +7,7 @@ import type { Role } from '@prisma/client'
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   trustHost: true,
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt', maxAge: 60 * 24 * 60 * 60 }, // 60 días
 
   providers: [
     Credentials({

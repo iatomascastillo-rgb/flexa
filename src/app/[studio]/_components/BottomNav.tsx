@@ -43,6 +43,16 @@ function UserIcon({ active }: { active: boolean }) {
   )
 }
 
+function ShoppingBagIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+      <line x1="3" x2="21" y1="6" y2="6" />
+      <path d="M16 10a4 4 0 0 1-8 0" />
+    </svg>
+  )
+}
+
 function GridIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -54,7 +64,20 @@ function GridIcon({ active }: { active: boolean }) {
   )
 }
 
-export function BottomNav({ studio, role }: { studio: string; role: string }) {
+function ClipboardIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M12 11h4" />
+      <path d="M12 16h4" />
+      <path d="M8 11h.01" />
+      <path d="M8 16h.01" />
+    </svg>
+  )
+}
+
+export function BottomNav({ studio, role, pendingCount = 0 }: { studio: string; role: string; pendingCount?: number }) {
   const pathname = usePathname()
 
   // SUPER_ADMIN: nav simplificado hacia el panel de plataforma
@@ -85,10 +108,51 @@ export function BottomNav({ studio, role }: { studio: string; role: string }) {
     )
   }
 
+  // INSTRUCTOR: nav con panel de clases + reserva de clases + perfil
+  if (role === 'INSTRUCTOR') {
+    const instructorLinks = [
+      { href: `/${studio}/instructor`, label: 'Mis clases', icon: ClipboardIcon },
+      { href: `/${studio}/clases`, label: 'Reservar', icon: CalendarIcon },
+      { href: `/${studio}/perfil`, label: 'Perfil', icon: UserIcon },
+    ]
+    return (
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D6] bg-[#F7F3EE]">
+        <div className="flex">
+          {instructorLinks.map(({ href, label, icon: Icon }) => {
+            const isActive = pathname === href || pathname.startsWith(href + '/')
+            const showBadge = href.includes('/instructor') && pendingCount > 0
+            return (
+              <Link
+                key={href}
+                href={href}
+                className="flex flex-1 flex-col items-center gap-0.5 py-3 text-xs transition-colors"
+                style={{ color: isActive ? 'var(--sage)' : 'var(--stone)' }}
+              >
+                <div className="relative">
+                  <Icon active={isActive} />
+                  {showBadge && (
+                    <span
+                      className="absolute -right-1.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                      style={{ background: 'var(--terracotta)' }}
+                    >
+                      {pendingCount}
+                    </span>
+                  )}
+                </div>
+                <span className={isActive ? 'font-medium' : ''}>{label}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+    )
+  }
+
   // Alumnos y STUDIO_ADMIN
   const links = [
     { href: `/${studio}`, label: 'Inicio', icon: HomeIcon },
     { href: `/${studio}/clases`, label: 'Clases', icon: CalendarIcon },
+    { href: `/${studio}/paquetes`, label: 'Paquetes', icon: ShoppingBagIcon },
     { href: `/${studio}/recurrencia`, label: 'Recurrencia', icon: RepeatIcon },
     { href: `/${studio}/perfil`, label: 'Perfil', icon: UserIcon },
   ]

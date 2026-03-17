@@ -1,7 +1,10 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound, redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
+import RecurringManager from './RecurringManager'
 
 export default async function RecurrenciaPage({
   params,
@@ -17,11 +20,42 @@ export default async function RecurrenciaPage({
   if (!tenant) notFound()
   if (session.user.studioId !== tenant.studioId) redirect('/login')
 
-  const classTypes = await prisma.classType.findMany({
-    where: { studioId: tenant.studioId, active: true },
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true },
-  })
+  // Instructores no usan recurrencias
+  if (session.user.role === 'INSTRUCTOR') redirect(`/${studio}`)
+
+  // Calcular rango: desde hoy hasta fin del próximo mes (cubre mes actual + siguiente)
+  // Si el cron aún no generó sesiones para el mes siguiente, usamos las del mes actual
+  const now = new Date()
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const nextMonth = now.getMonth() === 11 ? 0 : now.getMonth() + 1
+  const nextYear = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear()
+  const startOfMonthAfterNext = new Date(Date.UTC(nextYear, nextMonth + 1, 1))
+
+  const [schedules, classTypes, sessionSlots] = await Promise.all([
+    // Schedules activos del usuario
+    prisma.recurringSchedule.findMany({
+      where: { studioId: tenant.studioId, userId: session.user.id, active: true },
+      include: { classType: { select: { name: true } } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    // Tipos de clase disponibles
+    prisma.classType.findMany({
+      where: { studioId: tenant.studioId, active: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+    // Horarios reales: mes actual + próximo mes como fallback si el cron no corrió aún
+    // Sin distinct para evitar problemas con Prisma+Postgres — el cliente deduplica con Set
+    prisma.classSession.findMany({
+      where: {
+        studioId: tenant.studioId,
+        cancelledAt: null,
+        date: { gte: today, lt: startOfMonthAfterNext },
+      },
+      select: { classTypeId: true, time: true },
+      orderBy: { time: 'asc' },
+    }),
+  ])
 
   return (
     <div className="mx-auto max-w-md px-4 pt-8 pb-24">
@@ -59,9 +93,9 @@ export default async function RecurrenciaPage({
         <ul className="space-y-2">
           {[
             'Elegís el tipo de clase, el día y el horario',
-            'El sistema te reserva automáticamente cada semana',
-            'Si no tenés créditos, la reserva queda en lista de espera',
-            'Podés pausar o cancelar en cualquier momento',
+            'El sistema te reserva automáticamente al inicio de cada mes',
+            'Si no tenés créditos al momento de la reserva, se avisa al estudio',
+            'Podés eliminar la recurrencia en cualquier momento',
           ].map((text, i) => (
             <li key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--stone)' }}>
               <span className="mt-0.5 text-xs font-bold" style={{ color: 'var(--sage)' }}>
@@ -73,45 +107,13 @@ export default async function RecurrenciaPage({
         </ul>
       </div>
 
-      {/* Tipos de clase disponibles */}
-      {classTypes.length > 0 ? (
-        <div className="mb-6">
-          <p className="mb-2 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
-            Clases disponibles en el estudio
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {classTypes.map((ct) => (
-              <span
-                key={ct.id}
-                className="rounded-full px-3 py-1 text-xs font-medium"
-                style={{ background: '#EDF4ED', color: 'var(--sage)' }}
-              >
-                {ct.name}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Próximamente */}
-      <div
-        className="rounded-2xl p-6 text-center"
-        style={{ background: 'white', border: '2px dashed #E8E0D6' }}
-      >
-        <p
-          className="mb-2 text-2xl font-light"
-          style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
-        >
-          Próximamente
-        </p>
-        <p className="text-sm" style={{ color: 'var(--stone)' }}>
-          La configuración de clases recurrentes estará disponible en la próxima actualización.
-          Por ahora podés reservar tus clases desde la sección{' '}
-          <a href={`/${studio}/clases`} className="font-medium" style={{ color: 'var(--sage)' }}>
-            Clases
-          </a>.
-        </p>
-      </div>
+      {/* Manager interactivo */}
+      <RecurringManager
+        studio={studio}
+        schedules={schedules}
+        classTypes={classTypes}
+        availableSlots={sessionSlots}
+      />
     </div>
   )
 }

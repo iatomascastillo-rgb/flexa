@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic'
 
+import { createHmac, timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { sendEmail } from '@/lib/email'
 
 // ── MP Types ──────────────────────────────────────────────────────────────────
 
@@ -15,6 +17,44 @@ interface MpPayment {
   id: number
   status: string               // "approved" | "pending" | "rejected" | ...
   external_reference: string | null  // = userPackageId que seteamos al crear la preferencia
+}
+
+// ── Verificación de firma MP (HMAC-SHA256) ────────────────────────────────────
+//
+// MP envía: x-signature: "ts=<timestamp>,v1=<hmac>"  y  x-request-id: "<id>"
+// El manifest que se firma es: "id:<dataId>;request-id:<xRequestId>;ts:<ts>"
+// Ref: https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks
+//
+// Usamos timingSafeEqual para evitar timing attacks en la comparación.
+
+function verifyMpSignature(
+  signatureHeader: string | null,
+  requestId: string | null,
+  dataId: string,
+  secret: string,
+): boolean {
+  if (!signatureHeader || !requestId) return false
+
+  // Parsear "ts=...,v1=..." sin asumir orden
+  const parts: Record<string, string> = {}
+  for (const chunk of signatureHeader.split(',')) {
+    const eq = chunk.indexOf('=')
+    if (eq > 0) parts[chunk.slice(0, eq).trim()] = chunk.slice(eq + 1).trim()
+  }
+
+  const { ts, v1 } = parts
+  if (!ts || !v1) return false
+
+  const manifest = `id:${dataId};request-id:${requestId};ts:${ts}`
+  const expected = createHmac('sha256', secret).update(manifest).digest('hex')
+
+  // Comparación en tiempo constante
+  try {
+    return timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(v1, 'hex'))
+  } catch {
+    // Buffer.from lanza si v1 no es hex válido
+    return false
+  }
 }
 
 // ── POST /api/webhooks/mercadopago ────────────────────────────────────────────
@@ -43,6 +83,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const mpPaymentIdStr = String(rawId)
+
+  // ── Verificar firma HMAC ──────────────────────────────────────────────────
+  // Si MP_WEBHOOK_SECRET está configurado, rechazar solicitudes sin firma válida.
+  // En desarrollo sin secret configurado se omite (para pruebas con ngrok).
+  const webhookSecret = process.env.MP_WEBHOOK_SECRET
+  if (webhookSecret) {
+    const isValid = verifyMpSignature(
+      req.headers.get('x-signature'),
+      req.headers.get('x-request-id'),
+      mpPaymentIdStr,
+      webhookSecret,
+    )
+    if (!isValid) {
+      console.warn('[webhook/mp] Invalid signature for payment:', mpPaymentIdStr)
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+    }
+  }
 
   // ── 1. Verificar pago en la API de MercadoPago ────────────────────────────
   let mpPayment: MpPayment
@@ -117,13 +174,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Fuera de la transacción y en try/catch — un fallo de notificación nunca
   // debe aparecer como error al webhook de MercadoPago.
   try {
-    // TODO: reemplazar por sendNotification() cuando se implemente /prompt whatsapp
-    // await sendNotification({
-    //   userId: userPackage.userId,
-    //   studioId: userPackage.studioId,
-    //   type: 'PAYMENT_APPROVED',
-    //   data: { userPackageId: userPackage.id },
-    // })
+    const [userForEmail, pkgForEmail, studioForEmail] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userPackage.userId },
+        select: { email: true, name: true },
+      }),
+      prisma.userPackage.findUnique({
+        where: { id: userPackage.id },
+        select: { expiresAt: true, package: { select: { name: true } } },
+      }),
+      prisma.studio.findUnique({
+        where: { id: userPackage.studioId },
+        select: { name: true },
+      }),
+    ])
+    if (userForEmail && pkgForEmail) {
+      await sendEmail(userForEmail.email, 'pago-aprobado', {
+        studentName: userForEmail.name ?? 'Alumna',
+        packageName: pkgForEmail.package?.name ?? 'Paquete',
+        classesTotal: userPackage.classesTotal,
+        expiresAt: pkgForEmail.expiresAt.toLocaleDateString('es-AR', {
+          day: 'numeric', month: 'long', year: 'numeric',
+        }),
+        studioName: studioForEmail?.name ?? '',
+      })
+    }
   } catch (err) {
     console.error('[webhook/mp] Error sending notification:', err)
   }

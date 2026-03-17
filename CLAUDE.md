@@ -7,7 +7,7 @@ Next.js 14 App Router · TypeScript estricto (sin `any`) · PostgreSQL (Neon) ·
 - Una sola DB compartida. **TODA tabla tiene `studioId`** — excepción: `studios` (es la raíz)
 - El `studioId` siempre viene del contexto del servidor, NUNCA del body del cliente
 - Subdominio → tenant: `centro-pilates.pilatesapp.com` → `studioId` via middleware
-- Roles: `SUPER_ADMIN` (plataforma) · `STUDIO_ADMIN` (gestiona su estudio) · `STUDENT`
+- Roles: `SUPER_ADMIN` (plataforma) · `STUDIO_ADMIN` (gestiona su estudio) · `INSTRUCTOR` (ve todas las clases del estudio, registra asistencia) · `STUDENT`
 
 ## Estructura de carpetas
 ```

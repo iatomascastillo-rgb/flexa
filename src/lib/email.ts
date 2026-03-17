@@ -13,6 +13,13 @@ export type EmailTemplate =
   // Alumna
   | 'confirmacion-reserva'
   | 'cancelacion-reserva'
+  | 'lista-de-espera-promovida'
+  | 'nuevo-alumno-admin'
+  | 'bienvenida-alumno'
+  | 'clase-cancelada-alumna'
+  | 'pago-aprobado'
+  | 'grace-cutoff-admin'
+  | 'resumen-mensual-admin'
   // Billing
   | 'trial-vencido'
   | 'trial-warning-2d'
@@ -151,6 +158,27 @@ function renderTemplate(template: EmailTemplate, data: Record<string, unknown>):
         `),
       }
 
+    case 'lista-de-espera-promovida':
+      return {
+        subject: `¡Conseguiste lugar! — ${data.className}`,
+        html: layout('¡Conseguiste lugar!', `
+          <h1 style="margin:0 0 8px;font-size:24px;font-weight:300;color:#2C2C2C;">¡Conseguiste lugar!</h1>
+          <p style="margin:0 0 20px;font-size:14px;color:#6B5B52;line-height:1.6;">
+            Hola ${data.studentName}, alguien canceló y te confirmamos desde la lista de espera.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+            <tr>
+              <td style="background:#F7F3EE;border-radius:12px;padding:16px;">
+                <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;">Tu clase</p>
+                <p style="margin:0 0 4px;font-size:14px;color:#2C2C2C;"><strong>${data.className}</strong></p>
+                <p style="margin:0;font-size:13px;color:#6B5B52;">${data.date} · ${data.time}</p>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#5C7A5E;">✓ Tu reserva está confirmada. ¡Te esperamos!</p>
+        `),
+      }
+
     case 'cancelacion-reserva':
       return {
         subject: `Cancelación confirmada — ${data.className}`,
@@ -258,6 +286,75 @@ function renderTemplate(template: EmailTemplate, data: Record<string, unknown>):
         `),
       }
 
+    case 'resumen-mensual-admin':
+      return {
+        subject: `[${data.studioName}] Resumen de ${data.month}`,
+        html: layout(`Resumen de ${data.month}`, `
+          <h1 style="margin:0 0 4px;font-size:24px;font-weight:300;color:#2C2C2C;">Así cerró ${data.month}</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#9E8E82;">Hola ${data.adminName}, este es el resumen de actividad de <strong>${data.studioName}</strong>.</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+            <tr>
+              <td width="48%" style="background:#F7F3EE;border-radius:12px;padding:16px;vertical-align:top;">
+                <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;">Alumnas activas</p>
+                <p style="margin:0;font-size:28px;font-weight:300;color:#2C2C2C;">${data.activeStudents}</p>
+                ${(data.newStudents as number) > 0
+                  ? `<p style="margin:4px 0 0;font-size:12px;color:#5C7A5E;">+${data.newStudents} nueva${(data.newStudents as number) !== 1 ? 's' : ''} este mes</p>`
+                  : '<p style="margin:4px 0 0;font-size:12px;color:#9E8E82;">Sin nuevas inscripciones</p>'}
+              </td>
+              <td width="4%"></td>
+              <td width="48%" style="background:#F7F3EE;border-radius:12px;padding:16px;vertical-align:top;">
+                <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;">Ingresos del mes</p>
+                <p style="margin:0;font-size:28px;font-weight:300;color:#2C2C2C;">$${(data.revenue as number).toLocaleString('es-AR')}</p>
+                <p style="margin:4px 0 0;font-size:12px;color:#9E8E82;">${data.paidPackages} paquete${(data.paidPackages as number) !== 1 ? 's' : ''} pagado${(data.paidPackages as number) !== 1 ? 's' : ''}</p>
+              </td>
+            </tr>
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr>
+              <td style="background:#F7F3EE;border-radius:12px;padding:16px;">
+                <p style="margin:0 0 12px;font-size:11px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;">Actividad</p>
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:13px;color:#6B5B52;padding-bottom:8px;">Clases realizadas</td>
+                    <td style="font-size:13px;color:#2C2C2C;font-weight:500;text-align:right;padding-bottom:8px;">${data.totalSessions}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:13px;color:#6B5B52;padding-bottom:8px;">Ocupación promedio</td>
+                    <td style="font-size:13px;color:#2C2C2C;font-weight:500;text-align:right;padding-bottom:8px;">${data.avgOccupancyPct}%</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:13px;color:#6B5B52;padding-bottom:8px;">Reservas confirmadas</td>
+                    <td style="font-size:13px;color:#2C2C2C;font-weight:500;text-align:right;padding-bottom:8px;">${data.confirmedBookings}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:13px;color:#6B5B52;padding-bottom:8px;">Reservas en gracia (sin pago)</td>
+                    <td style="font-size:13px;color:${(data.graceBookings as number) > 0 ? '#C4774A' : '#2C2C2C'};font-weight:500;text-align:right;padding-bottom:8px;">${data.graceBookings}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:13px;color:#6B5B52;padding-bottom:8px;">Ausencias (no-shows)</td>
+                    <td style="font-size:13px;color:${(data.noShows as number) > 0 ? '#C4774A' : '#2C2C2C'};font-weight:500;text-align:right;padding-bottom:8px;">${data.noShows}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:13px;color:#6B5B52;padding-bottom:8px;">Cancelaciones de alumnas</td>
+                    <td style="font-size:13px;color:#2C2C2C;font-weight:500;text-align:right;padding-bottom:8px;">${data.cancellations}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:13px;color:#6B5B52;">Sin actividad este mes</td>
+                    <td style="font-size:13px;color:${(data.studentsWithoutActivity as number) > 0 ? '#C4774A' : '#2C2C2C'};font-weight:500;text-align:right;">${data.studentsWithoutActivity}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0;font-size:12px;color:#C4B8AC;text-align:center;">
+            Este resumen se genera automáticamente el 1° de cada mes para el mes anterior.
+          </p>
+        `),
+      }
+
     case 'admin-resumen':
       return {
         subject: `[${APP_NAME}] Resumen diario billing — ${new Date().toLocaleDateString('es-AR')}`,
@@ -276,6 +373,114 @@ function renderTemplate(template: EmailTemplate, data: Record<string, unknown>):
               `<p style="margin:0 0 4px;font-size:13px;color:#C4774A;">• ${e.studioName}: ${e.error}</p>`
             ).join('')}
           ` : ''}
+        `),
+      }
+
+    case 'nuevo-alumno-admin':
+      return {
+        subject: `Nueva alumna en ${data.studioName}: ${data.studentName}`,
+        html: layout('Nueva alumna', `
+          <h1 style="margin:0 0 8px;font-size:24px;font-weight:300;color:#2C2C2C;">Nueva alumna registrada</h1>
+          <p style="margin:0 0 20px;font-size:14px;color:#6B5B52;line-height:1.6;">
+            Hola ${data.adminName}, <strong>${data.studentName}</strong> se acaba de registrar en <strong>${data.studioName}</strong>.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr>
+              <td style="background:#F7F3EE;border-radius:12px;padding:16px;">
+                <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;">Alumna</p>
+                <p style="margin:0;font-size:14px;color:#2C2C2C;">${data.studentName}</p>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#6B5B52;">Podés verla en el panel de alumnos y asignarle un paquete cuando corresponda.</p>
+        `),
+      }
+
+    case 'bienvenida-alumno':
+      return {
+        subject: `¡Bienvenida a ${data.studioName}!`,
+        html: layout('Bienvenida', `
+          <h1 style="margin:0 0 8px;font-size:24px;font-weight:300;color:#2C2C2C;">
+            ¡Hola, ${data.studentName}!
+          </h1>
+          <p style="margin:0 0 20px;font-size:14px;color:#6B5B52;line-height:1.6;">
+            Tu cuenta en <strong>${data.studioName}</strong> fue creada exitosamente.
+            Ya podés reservar tus clases desde la app.
+          </p>
+          <p style="margin:0;font-size:13px;color:#9E8E82;">
+            Si tenés alguna consulta, contactate directamente con el estudio. ¡Te esperamos!
+          </p>
+        `),
+      }
+
+    case 'clase-cancelada-alumna':
+      return {
+        subject: `Clase cancelada — ${data.className}`,
+        html: layout('Clase cancelada', `
+          <h1 style="margin:0 0 8px;font-size:24px;font-weight:300;color:#2C2C2C;">Clase cancelada</h1>
+          <p style="margin:0 0 20px;font-size:14px;color:#6B5B52;">
+            Hola ${data.studentName}, el estudio canceló la siguiente clase:
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+            <tr>
+              <td style="background:#F7F3EE;border-radius:12px;padding:16px;">
+                <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;">Detalle</p>
+                <p style="margin:0 0 4px;font-size:14px;color:#2C2C2C;"><strong>${data.className}</strong></p>
+                <p style="margin:0;font-size:13px;color:#6B5B52;">${data.date} · ${data.time}</p>
+              </td>
+            </tr>
+          </table>
+          ${data.creditsRefunded
+            ? `<p style="margin:0;font-size:13px;color:#5C7A5E;">✓ Tu crédito fue devuelto automáticamente.</p>`
+            : `<p style="margin:0;font-size:13px;color:#9E8E82;">Estabas en lista de espera — no se consumió ningún crédito.</p>`
+          }
+        `),
+      }
+
+    case 'pago-aprobado':
+      return {
+        subject: `Pago confirmado — ${data.packageName}`,
+        html: layout('Pago confirmado', `
+          <h1 style="margin:0 0 8px;font-size:24px;font-weight:300;color:#2C2C2C;">¡Pago confirmado!</h1>
+          <p style="margin:0 0 20px;font-size:14px;color:#6B5B52;">
+            Hola ${data.studentName}, tu pago fue procesado correctamente.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr>
+              <td style="background:#F7F3EE;border-radius:12px;padding:16px;">
+                <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;">Tu paquete</p>
+                <p style="margin:0 0 4px;font-size:14px;color:#2C2C2C;"><strong>${data.packageName}</strong></p>
+                <p style="margin:0 0 4px;font-size:13px;color:#6B5B52;">${data.classesTotal} clases</p>
+                <p style="margin:0;font-size:13px;color:#6B5B52;">Vence el ${data.expiresAt}</p>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#5C7A5E;">✓ Ya podés reservar tus clases en ${data.studioName}.</p>
+        `),
+      }
+
+    case 'grace-cutoff-admin':
+      return {
+        subject: `[${data.studioName}] Alumnos con reservas impagas — período de gracia vencido`,
+        html: layout('Período de gracia vencido', `
+          <h1 style="margin:0 0 8px;font-size:24px;font-weight:300;color:#2C2C2C;">Período de gracia vencido</h1>
+          <p style="margin:0 0 20px;font-size:14px;color:#6B5B52;line-height:1.6;">
+            Hola ${data.adminName}, el corte del período de gracia de <strong>${data.studioName}</strong> procesó
+            <strong>${data.studentCount} alumna${(data.studentCount as number) !== 1 ? 's' : ''}</strong> con reservas pendientes de pago.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+            <tr>
+              <td style="background:#F7F3EE;border-radius:12px;padding:16px;">
+                <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;">Alumnas afectadas</p>
+                ${(data.students as { name: string; bookingCount: number }[]).map((s) =>
+                  `<p style="margin:0 0 4px;font-size:13px;color:#2C2C2C;">• ${s.name} — ${s.bookingCount} reserva${s.bookingCount !== 1 ? 's' : ''}</p>`
+                ).join('')}
+              </td>
+            </tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#6B5B52;">
+            Sus reservas futuras fueron mantenidas (política KEEP_AND_ALERT). Revisá el panel de alumnos para gestionar los pagos pendientes.
+          </p>
         `),
       }
 

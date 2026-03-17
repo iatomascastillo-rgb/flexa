@@ -8,25 +8,30 @@ import { prisma } from '@/lib/prisma'
 
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
-/** Devuelve las próximas `weeks` fechas para el día de semana dado (0=Dom...6=Sáb).
- *  Almacena a las 12:00 UTC para que en UTC-3 (Argentina) siga siendo el mismo día.
+/**
+ * Genera todas las fechas que coinciden con `dayIndex` (0=Dom…6=Sáb) desde hoy
+ * hasta el último día del mes siguiente (timezone Argentina UTC-3).
+ * Incluye hoy si hoy coincide con el día pedido.
  */
-function getNextDates(dayIndex: number, weeks: number): Date[] {
+function getDatesUntilEndOfNextMonth(dayIndex: number): Date[] {
   const now = new Date()
-  // Día actual en Argentina (UTC-3)
   const arNow = new Date(now.getTime() - 3 * 60 * 60 * 1000)
-  const todayDow = arNow.getUTCDay()
-  // Mediodía UTC = 9 AM Argentina: seguro para cualquier día del mes
-  const todayNoon = new Date(
-    Date.UTC(arNow.getUTCFullYear(), arNow.getUTCMonth(), arNow.getUTCDate(), 12, 0, 0)
-  )
+  const arY = arNow.getUTCFullYear()
+  const arM = arNow.getUTCMonth()
+  const arD = arNow.getUTCDate()
 
-  let daysAhead = (dayIndex - todayDow + 7) % 7
-  if (daysAhead === 0) daysAhead = 7 // empezar la semana que viene si es hoy
+  const nextMonth = (arM + 1) % 12
+  const nextYear = arM === 11 ? arY + 1 : arY
+  const daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate()
+  const cutoff = new Date(Date.UTC(nextYear, nextMonth, daysInNextMonth))
 
   const dates: Date[] = []
-  for (let i = 0; i < weeks; i++) {
-    dates.push(new Date(todayNoon.getTime() + (daysAhead + i * 7) * 24 * 60 * 60 * 1000))
+  const cursor = new Date(Date.UTC(arY, arM, arD))
+  while (cursor <= cutoff) {
+    if (cursor.getUTCDay() === dayIndex) {
+      dates.push(new Date(cursor))
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
   return dates
 }
@@ -34,7 +39,7 @@ function getNextDates(dayIndex: number, weeks: number): Date[] {
 function fmtDate(date: Date): string {
   return date.toLocaleDateString('es-AR', {
     weekday: 'short', day: 'numeric', month: 'short',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: 'UTC',
   })
 }
 
@@ -53,18 +58,22 @@ async function addScheduleAction(formData: FormData) {
   if (!tenant || tenant.studioId !== session.user.studioId) return
   if (!classTypeId || isNaN(dayIndex) || !time) return
 
-  const dates = getNextDates(dayIndex, 4)
+  const dates = getDatesUntilEndOfNextMonth(dayIndex)
   const studioId = tenant.studioId
 
-  await Promise.all(
-    dates.map((date) =>
-      prisma.classSession.upsert({
-        where: { studioId_date_time_classTypeId: { studioId, date, time, classTypeId } },
-        update: {},
-        create: { studioId, classTypeId, date, time },
-      }),
-    ),
-  )
+  // También crear el ClassScheduleTemplate para que el cron lo use en meses futuros
+  const DOW_MAP = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'] as const
+  const dayOfWeek = DOW_MAP[dayIndex]
+  await prisma.classScheduleTemplate.upsert({
+    where: { studioId_classTypeId_dayOfWeek_time: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time } },
+    update: { active: true },
+    create: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time },
+  })
+
+  await prisma.classSession.createMany({
+    data: dates.map((date) => ({ studioId, classTypeId, date, time })),
+    skipDuplicates: true,
+  })
 
   revalidatePath(`/${studio}/onboarding/3`)
 }
@@ -100,7 +109,7 @@ export default async function OnboardingStep3({
       select: { id: true, name: true },
     }),
     prisma.classSession.findMany({
-      where: { studioId, date: { gte: new Date() }, cancelledAt: null },
+      where: { studioId, date: { gte: new Date(new Date().setUTCHours(0, 0, 0, 0)) }, cancelledAt: null },
       orderBy: [{ date: 'asc' }, { time: 'asc' }],
       take: 16,
       select: {

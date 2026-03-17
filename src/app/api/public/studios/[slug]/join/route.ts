@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
+import { sendEmail } from '@/lib/email'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -75,6 +76,27 @@ export async function POST(
     })
 
     console.log(`[join] Nueva alumna en ${slug}: userId=${user.id}`)
+
+    // Emails post-registro — en try/catch independiente para no bloquear la respuesta
+    try {
+      const admin = await prisma.user.findFirst({
+        where: { studioId: studio.id, role: 'STUDIO_ADMIN' },
+        select: { email: true, name: true },
+      })
+      await Promise.all([
+        sendEmail(email.toLowerCase(), 'bienvenida-alumno', {
+          studentName: name.trim(),
+          studioName: studio.name,
+        }),
+        ...(admin ? [sendEmail(admin.email, 'nuevo-alumno-admin', {
+          adminName: admin.name ?? 'Admin',
+          studentName: name.trim(),
+          studioName: studio.name,
+        })] : []),
+      ])
+    } catch (emailErr) {
+      console.error('[join] Error enviando emails:', emailErr)
+    }
 
     return NextResponse.json(
       { userId: user.id, message: 'Cuenta creada. Ya podés iniciar sesión.' },

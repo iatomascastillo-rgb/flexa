@@ -61,6 +61,28 @@ async function removeBookingAction(formData: FormData) {
   revalidatePath(`/${studio}/admin/sesiones/${sessionId}`)
 }
 
+async function updateInstructorAction(formData: FormData) {
+  'use server'
+  const sessionId = formData.get('sessionId') as string
+  const studio = formData.get('studio') as string
+
+  const session = await auth()
+  if (!session?.user?.id) return
+  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
+
+  const tenant = await getTenantBySlug(studio)
+  if (!tenant || tenant.studioId !== session.user.studioId) return
+
+  const instructorName = (formData.get('instructorName') as string)?.trim() || null
+
+  await prisma.classSession.update({
+    where: { id: sessionId, studioId: tenant.studioId },
+    data: { instructorName },
+  })
+
+  revalidatePath(`/${studio}/admin/sesiones/${sessionId}`)
+}
+
 async function cancelSessionAction(formData: FormData) {
   'use server'
   const sessionId = formData.get('sessionId') as string
@@ -96,7 +118,7 @@ function fmtDate(date: Date): string {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: 'UTC',
   })
 }
 
@@ -135,6 +157,7 @@ export default async function AdminSessionDetailPage({
       time: true,
       cancelledAt: true,
       capacityOverride: true,
+      instructorName: true,
       studioId: true,
       classType: { select: { name: true, defaultCapacity: true, level: true } },
       bookings: {
@@ -188,6 +211,37 @@ export default async function AdminSessionDetailPage({
           </p>
         </div>
       </div>
+
+      {/* Instructor */}
+      {!isCancelled && (
+        <div
+          className="mb-4 rounded-2xl p-4"
+          style={{ background: 'white', border: '1px solid #E8E0D6' }}
+        >
+          <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+            Instructor
+          </p>
+          <form action={updateInstructorAction} className="flex gap-2">
+            <input type="hidden" name="sessionId" value={sessionId} />
+            <input type="hidden" name="studio" value={studio} />
+            <input
+              type="text"
+              name="instructorName"
+              defaultValue={classSession.instructorName ?? ''}
+              placeholder="Sin instructor asignado"
+              className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+              style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-xl px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80"
+              style={{ background: '#EDF4ED', color: 'var(--sage)' }}
+            >
+              Guardar
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Badge cancelada */}
       {isCancelled && (

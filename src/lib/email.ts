@@ -1,6 +1,11 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy initialization: evita que el constructor falle en build time si la env var no está seteada
+let _resend: Resend | null = null
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY)
+  return _resend
+}
 const FROM = process.env.EMAIL_FROM ?? 'onboarding@resend.dev'
 const APP_NAME = 'Flexa'
 
@@ -501,7 +506,7 @@ export async function sendEmail(
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     const { subject, html } = renderTemplate(template, data)
-    const result = await resend.emails.send({ from: FROM, to, subject, html })
+    const result = await getResend().emails.send({ from: FROM, to, subject, html })
 
     if (result.error) {
       console.error(`[email] Error sending ${template} to ${to}:`, result.error)

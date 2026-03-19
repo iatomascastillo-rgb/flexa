@@ -1,8 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import { revalidateTag } from 'next/cache'
 import Link from 'next/link'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage, checkStudioAdmin } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
 
 // ── Server Action ──────────────────────────────────────────────────────────────
@@ -11,12 +10,9 @@ async function savePoliticasAction(formData: FormData) {
   'use server'
   const studio = formData.get('studio') as string
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
 
   const bookingWindowHours = Math.min(24, Math.max(0, parseInt(formData.get('bookingWindowHours') as string) || 0))
   const cancellationHours = Math.min(48, Math.max(1, parseInt(formData.get('cancellationHours') as string) || 12))
@@ -28,9 +24,10 @@ async function savePoliticasAction(formData: FormData) {
   const graceOnNoPay = formData.get('graceOnNoPay') === 'KEEP_AND_ALERT' ? 'KEEP_AND_ALERT' : 'RELEASE_TO_WAITLIST'
   const recoveryEnabled = formData.get('recoveryEnabled') === 'on'
   const recoveryDays = Math.min(30, Math.max(1, parseInt(formData.get('recoveryDays') as string) || 7))
+  const trialCreditEnabled = formData.get('trialCreditEnabled') === 'on'
 
   await prisma.studioSettings.update({
-    where: { studioId: tenant.studioId },
+    where: { studioId },
     data: {
       bookingWindowHours,
       cancellationHours,
@@ -42,10 +39,11 @@ async function savePoliticasAction(formData: FormData) {
       graceOnNoPay,
       recoveryEnabled,
       recoveryDays,
+      trialCreditEnabled,
     },
   })
 
-  revalidateTag(`settings-${tenant.studioId}`, {})
+  revalidateTag(`settings-${studioId}`, {})
   redirect(`/${studio}/admin/settings/politicas?saved=1`)
 }
 
@@ -61,18 +59,10 @@ export default async function PoliticasPage({
   const { studio } = await params
   const { saved } = await searchParams
 
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
+  const { studioId } = await requireStudioAdminPage(studio)
 
   const settings = await prisma.studioSettings.findUnique({
-    where: { studioId: tenant.studioId },
+    where: { studioId },
   })
 
   if (!settings) notFound()
@@ -362,6 +352,38 @@ export default async function PoliticasPage({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* ── Clase de prueba ── */}
+        <div
+          className="rounded-2xl p-5"
+          style={{ background: 'white', border: '1px solid #E8E0D6' }}
+        >
+          <h2
+            className="mb-1 text-xl font-light"
+            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
+          >
+            Alumno nuevo
+          </h2>
+          <p className="mb-4 text-xs" style={{ color: 'var(--stone)' }}>
+            Si está habilitado, cada alumna que se registre en tu estudio recibirá automáticamente 1 crédito de prueba gratuito. Podrás ver en el panel quiénes solo usaron la prueba y no renovaron.
+          </p>
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              name="trialCreditEnabled"
+              defaultChecked={settings.trialCreditEnabled}
+              className="mt-0.5 shrink-0 accent-[var(--sage)]"
+            />
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
+                Dar 1 crédito de prueba a alumnas nuevas
+              </p>
+              <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                El crédito vence el último día del mes en que se registra.
+              </p>
+            </div>
+          </label>
         </div>
 
         {/* Guardar */}

@@ -77,27 +77,29 @@ export async function POST(
     return NextResponse.json({ error: 'time debe tener formato HH:mm' }, { status: 400 })
   }
 
-  // Verificar que classType pertenece al estudio
-  const classType = await prisma.classType.findUnique({
-    where: { id: classTypeId },
-    select: { studioId: true, active: true },
-  })
+  // Verificar classType y duplicado en paralelo
+  const [classType, existing] = await Promise.all([
+    prisma.classType.findUnique({
+      where: { id: classTypeId },
+      select: { studioId: true, active: true },
+    }),
+    prisma.recurringSchedule.findFirst({
+      where: {
+        studioId: tenant.studioId,
+        userId: session.user.id,
+        classTypeId,
+        dayOfWeek: dayOfWeek as DayOfWeek,
+        time,
+        active: true,
+      },
+      select: { id: true },
+    }),
+  ])
+
   if (!classType || classType.studioId !== tenant.studioId || !classType.active) {
     return NextResponse.json({ error: 'Tipo de clase no encontrado' }, { status: 404 })
   }
 
-  // Prevenir duplicados (no hay unique constraint en DB — lo verificamos en app)
-  const existing = await prisma.recurringSchedule.findFirst({
-    where: {
-      studioId: tenant.studioId,
-      userId: session.user.id,
-      classTypeId,
-      dayOfWeek: dayOfWeek as DayOfWeek,
-      time,
-      active: true,
-    },
-    select: { id: true },
-  })
   if (existing) {
     return NextResponse.json({ error: 'Ya tenés una recurrencia para ese día y horario' }, { status: 409 })
   }

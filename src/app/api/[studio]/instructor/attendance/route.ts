@@ -1,16 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireInstructorAPI } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
-
-function todayARStart(): Date {
-  const now = new Date()
-  const arMs = now.getTime() + -3 * 60 * 60_000
-  const ar = new Date(arMs)
-  return new Date(Date.UTC(ar.getUTCFullYear(), ar.getUTCMonth(), ar.getUTCDate()))
-}
+import { todayARStart } from '@/lib/formatters'
 
 export async function POST(
   req: NextRequest,
@@ -18,30 +11,24 @@ export async function POST(
 ) {
   const { studio } = await params
 
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  }
-  if (
-    session.user.role !== 'INSTRUCTOR' &&
-    session.user.role !== 'STUDIO_ADMIN' &&
-    session.user.role !== 'SUPER_ADMIN'
-  ) {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
+  const guard = await requireInstructorAPI(studio)
+  if (!guard.ok) return guard.response
+  const { studioId } = guard
 
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) return NextResponse.json({ error: 'Estudio no encontrado' }, { status: 404 })
-
-  const body = await req.json()
-  const { bookingId, status } = body as { bookingId?: string; status?: string }
+  let body: { bookingId?: string; status?: string }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
+  }
+  const { bookingId, status } = body
 
   if (!bookingId || (status !== 'ATTENDED' && status !== 'NO_SHOW')) {
     return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 })
   }
 
   const booking = await prisma.booking.findFirst({
-    where: { id: bookingId, studioId: tenant.studioId, status: 'CONFIRMED' },
+    where: { id: bookingId, studioId, status: 'CONFIRMED' },
     select: {
       userId: true,
       userPackageId: true,
@@ -72,7 +59,7 @@ export async function POST(
     // Solo si: status = NO_SHOW + tenía crédito + noShowPolicy = LOSE_CREDIT + recovery habilitado
     if (status === 'NO_SHOW' && booking.userPackageId !== null) {
       const settings = await tx.studioSettings.findUnique({
-        where: { studioId: tenant.studioId },
+        where: { studioId },
         select: { noShowPolicy: true, recoveryEnabled: true, recoveryDays: true },
       })
 
@@ -98,7 +85,7 @@ export async function POST(
 
         const recoveryPackage = await tx.userPackage.create({
           data: {
-            studioId: tenant.studioId,
+            studioId,
             userId: booking.userId,
             packageId: null,
             paymentStatus: 'APPROVED',
@@ -114,7 +101,7 @@ export async function POST(
 
         await tx.creditTransaction.create({
           data: {
-            studioId: tenant.studioId,
+            studioId,
             userPackageId: recoveryPackage.id,
             type: 'RECOVERY_CREDIT',
             amount: 1,

@@ -1,21 +1,10 @@
-import { notFound, redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import bcrypt from 'bcryptjs'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage, checkStudioAdmin } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-}
+import { initials } from '@/lib/formatters'
 
 // ── Server actions ─────────────────────────────────────────────────────────────
 
@@ -29,28 +18,25 @@ async function createInstructorAction(formData: FormData) {
   const passwordConfirm = formData.get('passwordConfirm') as string
 
   if (!name || !email || !password) redirect(`/${studio}/admin/instructores?error=campos`)
-  if (password.length < 6) redirect(`/${studio}/admin/instructores?error=password-corta`)
+  if (password.length < 8 || password.length > 72) redirect(`/${studio}/admin/instructores?error=password-corta`)
   if (password !== passwordConfirm) redirect(`/${studio}/admin/instructores?error=password-mismatch`)
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || session.user.studioId !== tenant.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
 
   // Verificar email único en el estudio
   const existing = await prisma.user.findFirst({
-    where: { email, studioId: tenant.studioId },
+    where: { email, studioId },
     select: { id: true },
   })
   if (existing) redirect(`/${studio}/admin/instructores?error=email-existe`)
 
-  const passwordHash = await bcrypt.hash(password, 10)
+  const passwordHash = await bcrypt.hash(password, 8)
 
   await prisma.user.create({
     data: {
-      studioId: tenant.studioId,
+      studioId,
       email,
       passwordHash,
       name,
@@ -72,21 +58,18 @@ async function toggleInstructorAction(formData: FormData) {
 
   if (!userId) return
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || session.user.studioId !== tenant.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId, session } = guard
 
   await prisma.$transaction([
     prisma.user.update({
-      where: { id: userId, studioId: tenant.studioId },
+      where: { id: userId, studioId },
       data: { active: !currentActive },
     }),
     prisma.auditLog.create({
       data: {
-        studioId: tenant.studioId,
+        studioId,
         userId: session.user.id,
         action: currentActive ? 'INSTRUCTOR_DEACTIVATED' : 'INSTRUCTOR_ACTIVATED',
         entityType: 'User',
@@ -109,25 +92,17 @@ export default async function AdminInstructoresPage({
 }) {
   const [{ studio }, sp] = await Promise.all([params, searchParams])
 
-  const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/admin/instructores`)
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
+  const { studioId } = await requireStudioAdminPage(studio)
 
   const instructors = await prisma.user.findMany({
-    where: { studioId: tenant.studioId, role: 'INSTRUCTOR' },
+    where: { studioId, role: 'INSTRUCTOR' },
     orderBy: [{ active: 'desc' }, { name: 'asc' }],
     select: { id: true, name: true, email: true, phone: true, active: true },
   })
 
   const errorMsg: Record<string, string> = {
     'campos': 'Nombre, email y contraseña son obligatorios.',
-    'password-corta': 'La contraseña debe tener al menos 6 caracteres.',
+    'password-corta': 'La contraseña debe tener entre 8 y 72 caracteres.',
     'password-mismatch': 'Las contraseñas no coinciden.',
     'email-existe': 'Ya existe un usuario con ese email en el estudio.',
   }

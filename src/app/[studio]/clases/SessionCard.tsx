@@ -10,6 +10,7 @@ interface SessionCardProps {
   className: string
   description?: string | null
   instructorName?: string | null
+  roomName?: string | null
   spotsLeft: number
   capacity: number
   isBookable: boolean
@@ -29,6 +30,7 @@ export function SessionCard({
   className,
   description,
   instructorName,
+  roomName,
   spotsLeft,
   isBookable,
   isCancellable,
@@ -118,6 +120,12 @@ export function SessionCard({
       {instructorName && (
         <p style={{ fontSize: '10px', color: 'var(--stone)', lineHeight: 1.2, marginBottom: '2px' }}>
           {instructorName}
+        </p>
+      )}
+
+      {roomName && (
+        <p style={{ fontSize: '10px', color: 'var(--stone)', lineHeight: 1.2, marginBottom: '2px', opacity: 0.75 }}>
+          {roomName}
         </p>
       )}
 

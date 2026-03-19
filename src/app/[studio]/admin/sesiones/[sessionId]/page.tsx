@@ -1,12 +1,12 @@
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage, checkStudioAdmin } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
 import { cancelSession, cancelBooking } from '@/services/booking.service'
 import { AppError } from '@/types/errors'
 import type { AttendanceStatus } from '@prisma/client'
+import { fmtTime, fmtDateUTC } from '@/lib/formatters'
 
 // ── Server Actions ─────────────────────────────────────────────────────────────
 
@@ -17,15 +17,12 @@ async function markAttendanceAction(formData: FormData) {
   const studio = formData.get('studio') as string
   const sessionId = formData.get('sessionId') as string
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
 
   await prisma.booking.update({
-    where: { id: bookingId, studioId: tenant.studioId },
+    where: { id: bookingId, studioId },
     data: { attendanceStatus: status === 'CLEAR' ? null : status },
   })
 
@@ -38,17 +35,14 @@ async function removeBookingAction(formData: FormData) {
   const sessionId = formData.get('sessionId') as string
   const studio = formData.get('studio') as string
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId, session } = guard
 
   try {
     await cancelBooking({
       bookingId,
-      studioId: tenant.studioId,
+      studioId,
       cancelledByUserId: session.user.id,
       cancellationReason: 'ADMIN_REMOVED',
     })
@@ -66,18 +60,34 @@ async function updateInstructorAction(formData: FormData) {
   const sessionId = formData.get('sessionId') as string
   const studio = formData.get('studio') as string
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
 
   const instructorName = (formData.get('instructorName') as string)?.trim() || null
 
   await prisma.classSession.update({
-    where: { id: sessionId, studioId: tenant.studioId },
+    where: { id: sessionId, studioId },
     data: { instructorName },
+  })
+
+  revalidatePath(`/${studio}/admin/sesiones/${sessionId}`)
+}
+
+async function updateRoomAction(formData: FormData) {
+  'use server'
+  const sessionId = formData.get('sessionId') as string
+  const studio = formData.get('studio') as string
+
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
+
+  const roomId = (formData.get('roomId') as string) || null
+
+  await prisma.classSession.update({
+    where: { id: sessionId, studioId },
+    data: { roomId },
   })
 
   revalidatePath(`/${studio}/admin/sesiones/${sessionId}`)
@@ -88,17 +98,14 @@ async function cancelSessionAction(formData: FormData) {
   const sessionId = formData.get('sessionId') as string
   const studio = formData.get('studio') as string
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId, session } = guard
 
   try {
     await cancelSession({
       classSessionId: sessionId,
-      studioId: tenant.studioId,
+      studioId,
       cancelledByUserId: session.user.id,
     })
   } catch (err) {
@@ -111,22 +118,6 @@ async function cancelSessionAction(formData: FormData) {
   revalidatePath(`/${studio}/admin/sesiones`)
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function fmtDate(date: Date): string {
-  return date.toLocaleDateString('es-AR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  })
-}
-
-function fmtTime(time: string): string {
-  const [h, m] = time.split(':')
-  return `${parseInt(h)}:${m}`
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function AdminSessionDetailPage({
@@ -136,44 +127,43 @@ export default async function AdminSessionDetailPage({
 }) {
   const { studio, sessionId } = await params
 
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
+  const { studioId } = await requireStudioAdminPage(studio)
 
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
-
-  const studioId = tenant.studioId
-
-  // ── Fetch sesión con bookings ──────────────────────────────────────────────
-  const classSession = await prisma.classSession.findUnique({
-    where: { id: sessionId },
-    select: {
-      id: true,
-      date: true,
-      time: true,
-      cancelledAt: true,
-      capacityOverride: true,
-      instructorName: true,
-      studioId: true,
-      classType: { select: { name: true, defaultCapacity: true, level: true } },
-      bookings: {
-        where: { status: { in: ['CONFIRMED', 'WAITLIST'] } },
-        orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
-        select: {
-          id: true,
-          status: true,
-          attendanceStatus: true,
-          userPackageId: true,
-          createdAt: true,
-          user: { select: { id: true, name: true, email: true } },
+  // ── Fetch sesión con bookings y rooms ─────────────────────────────────────
+  const [classSession, activeRooms] = await Promise.all([
+    prisma.classSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        date: true,
+        time: true,
+        cancelledAt: true,
+        capacityOverride: true,
+        instructorName: true,
+        studioId: true,
+        roomId: true,
+        room: { select: { name: true } },
+        classType: { select: { name: true, defaultCapacity: true, level: true } },
+        bookings: {
+          where: { status: { in: ['CONFIRMED', 'WAITLIST'] } },
+          orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+          select: {
+            id: true,
+            status: true,
+            attendanceStatus: true,
+            userPackageId: true,
+            createdAt: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
         },
       },
-    },
-  })
+    }),
+    prisma.room.findMany({
+      where: { studioId, active: true },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ])
 
   if (!classSession || classSession.studioId !== studioId) notFound()
 
@@ -206,13 +196,14 @@ export default async function AdminSessionDetailPage({
             {classSession.classType.name}
           </h1>
           <p className="mt-0.5 text-xs capitalize" style={{ color: 'var(--stone)' }}>
-            {fmtDate(classSession.date)} · {fmtTime(classSession.time)}
+            {fmtDateUTC(classSession.date)} · {fmtTime(classSession.time)}
             {classSession.classType.level ? ` · ${classSession.classType.level}` : ''}
+            {classSession.room ? ` · ${classSession.room.name}` : ''}
           </p>
         </div>
       </div>
 
-      {/* Instructor */}
+      {/* Instructor + Salón */}
       {!isCancelled && (
         <div
           className="mb-4 rounded-2xl p-4"
@@ -221,7 +212,7 @@ export default async function AdminSessionDetailPage({
           <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
             Instructor
           </p>
-          <form action={updateInstructorAction} className="flex gap-2">
+          <form action={updateInstructorAction} className="mb-4 flex gap-2">
             <input type="hidden" name="sessionId" value={sessionId} />
             <input type="hidden" name="studio" value={studio} />
             <input
@@ -240,6 +231,36 @@ export default async function AdminSessionDetailPage({
               Guardar
             </button>
           </form>
+
+          {activeRooms.length > 0 && (
+            <>
+              <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+                Salón
+              </p>
+              <form action={updateRoomAction} className="flex gap-2">
+                <input type="hidden" name="sessionId" value={sessionId} />
+                <input type="hidden" name="studio" value={studio} />
+                <select
+                  name="roomId"
+                  defaultValue={classSession.roomId ?? ''}
+                  className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+                  style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+                >
+                  <option value="">Sin salón asignado</option>
+                  {activeRooms.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="submit"
+                  className="shrink-0 rounded-xl px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80"
+                  style={{ background: '#EDF4ED', color: 'var(--sage)' }}
+                >
+                  Guardar
+                </button>
+              </form>
+            </>
+          )}
         </div>
       )}
 

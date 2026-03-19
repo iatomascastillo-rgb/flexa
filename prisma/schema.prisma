@@ -95,6 +95,11 @@ enum DayOfWeek {
   SUNDAY
 }
 
+enum HolidayPolicy {
+  NO_CLASSES    // No hay clases ese día — el cron no genera sesiones
+  CLASSES_NORMAL // El estudio da clase igual — el cron ignora el feriado
+}
+
 // ─── Tables ──────────────────────────────────────────────────────────────────
 
 /// Punto de entrada del tenant. No tiene studioId — es la raíz.
@@ -112,6 +117,7 @@ model Studio {
   branding           StudioBranding?
   subscription       Subscription?
   users              User[]
+  rooms                   Room[]
   classTypes              ClassType[]
   classSessions           ClassSession[]
   classScheduleTemplates  ClassScheduleTemplate[]
@@ -124,6 +130,7 @@ model Studio {
   platformEvents          PlatformEvent[]
   saasPayments            SaasPayment[]
   aiInsights              AiInsight[]
+  holidays                StudioHoliday[]
 
   @@map("studios")
 }
@@ -176,6 +183,10 @@ model StudioSettings {
   /// Access token de MercadoPago del estudio (token de producción del admin del estudio)
   mpAccessToken         String?
 
+  /// Si está habilitado, los alumnos nuevos reciben 1 crédito de prueba gratuito al unirse.
+  /// Permite al admin filtrar después qué alumnos hicieron solo la prueba y no renovaron.
+  trialCreditEnabled    Boolean                @default(false)
+
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -184,17 +195,34 @@ model StudioSettings {
 
 /// Branding personalizado por estudio (Fase 2).
 model StudioBranding {
-  id             String   @id @default(cuid())
-  studioId       String   @unique
-  studio         Studio   @relation(fields: [studioId], references: [id])
+  id              String   @id @default(cuid())
+  studioId        String   @unique
+  studio          Studio   @relation(fields: [studioId], references: [id])
 
-  primaryColor   String?
-  accentColor    String?
-  logoUrl        String?
-  welcomeMessage String?
+  primaryColor    String?
+  accentColor     String?
+  logoUrl         String?
+  welcomeMessage  String?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  /// Fuente para títulos: "cormorant" | "playfair" | "lora" | "eb_garamond"
+  fontDisplay     String?
+  /// Fuente para cuerpo: "dm_sans" | "inter" | "nunito" | "lato"
+  fontBody        String?
+  /// Color de fondo principal (--cream). Ej: "#F7F3EE"
+  backgroundColor String?
+  /// Foto de portada/banner del header del estudio
+  coverUrl        String?
+  /// Modo oscuro activado para este estudio
+  darkMode        Boolean  @default(false)
+  /// Color de fondo del nav inferior (si difiere del primaryColor)
+  navColor        String?
+
+  instagramUrl    String?
+  whatsappUrl     String?
+  websiteUrl      String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@map("studio_branding")
 }
@@ -270,6 +298,25 @@ model ClassType {
   @@map("class_types")
 }
 
+/// Salón físico del estudio. Opcional — estudios con un solo espacio no necesitan configurarlo.
+model Room {
+  id        String   @id @default(cuid())
+  studioId  String
+  studio    Studio   @relation(fields: [studioId], references: [id])
+
+  name      String
+  active    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  classScheduleTemplates ClassScheduleTemplate[]
+  classSessions          ClassSession[]
+
+  @@index([studioId, active])
+  @@map("rooms")
+}
+
 /// Cada clase concreta. Creadas por el cron el día 25.
 model ClassSession {
   id               String    @id @default(cuid())
@@ -278,6 +325,10 @@ model ClassSession {
 
   classTypeId      String
   classType        ClassType @relation(fields: [classTypeId], references: [id])
+
+  /// Salón físico donde se dicta la clase. Null = estudio sin salones configurados.
+  roomId           String?
+  room             Room?     @relation(fields: [roomId], references: [id])
 
   date             DateTime  @db.Date
   time             String    // "HH:mm" — ej: "09:00"
@@ -291,7 +342,7 @@ model ClassSession {
 
   bookings         Booking[]
 
-  @@unique([studioId, date, time, classTypeId])
+  @@unique([studioId, date, time, classTypeId, roomId])
   @@index([studioId, date])
   @@index([studioId, classTypeId, date])
   @@map("class_sessions")
@@ -342,6 +393,9 @@ model UserPackage {
   /// true cuando este paquete fue generado automáticamente como crédito de recuperación
   /// (por no-show o cancelación tardía con recoveryEnabled = true en StudioSettings)
   isRecovery      Boolean       @default(false)
+
+  /// true cuando este paquete fue otorgado como clase de prueba gratuita al alumno nuevo
+  isTrial         Boolean       @default(false)
 
   /// userId del admin que aprobó (efectivo/transferencia/ajuste manual)
   approvedBy      String?
@@ -404,6 +458,10 @@ model ClassScheduleTemplate {
   classTypeId String
   classType   ClassType @relation(fields: [classTypeId], references: [id])
 
+  /// Salón físico asociado a este horario. Null = estudio sin salones configurados.
+  roomId      String?
+  room        Room?     @relation(fields: [roomId], references: [id])
+
   dayOfWeek      DayOfWeek
   time           String    // "HH:mm"
   active         Boolean   @default(true)
@@ -413,7 +471,7 @@ model ClassScheduleTemplate {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@unique([studioId, classTypeId, dayOfWeek, time])
+  @@unique([studioId, classTypeId, dayOfWeek, time, roomId])
   @@index([studioId, active])
   @@map("class_schedule_templates")
 }
@@ -525,6 +583,24 @@ model AiInsight {
 
   @@index([studioId, type, createdAt])
   @@map("ai_insights")
+}
+
+/// Días feriados o de cierre configurados por el estudio.
+/// El cron generate-month los consulta antes de generar sesiones.
+model StudioHoliday {
+  id        String        @id @default(cuid())
+  studioId  String
+  studio    Studio        @relation(fields: [studioId], references: [id])
+
+  date      DateTime      @db.Date  // fecha exacta del feriado (medianoche UTC)
+  name      String?                 // ej: "Navidad", "Cierre de verano"
+  policy    HolidayPolicy @default(NO_CLASSES)
+
+  createdAt DateTime      @default(now())
+
+  @@unique([studioId, date])
+  @@index([studioId, date])
+  @@map("studio_holidays")
 }
 
 // -- MIGRATION: ALTER TABLE user_packages ADD CONSTRAINT classes_remaining_non_negative CHECK (classes_remaining >= 0);

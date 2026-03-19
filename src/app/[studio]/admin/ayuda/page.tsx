@@ -1,7 +1,5 @@
-import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage } from '@/lib/auth-guards'
 
 export default async function AyudaPage({
   params,
@@ -10,15 +8,7 @@ export default async function AyudaPage({
 }) {
   const { studio } = await params
 
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
+  await requireStudioAdminPage(studio)
 
   const sections = [
     {

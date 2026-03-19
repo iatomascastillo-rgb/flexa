@@ -1,18 +1,11 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { fmtARS, fmtDateShort } from '@/lib/formatters'
 
 // Precios en ARS (para revenue estimado)
 const PLAN_PRICE: Record<string, number> = {
   BASICO: 12000,
   PRO: 22000,
-}
-
-function fmtARS(amount: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount)
-}
-
-function fmtDateShort(d: Date): string {
-  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' })
 }
 
 function monthKey(d: Date): string {

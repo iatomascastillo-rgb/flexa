@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
+import { fmtDateAR } from '@/lib/formatters'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,13 +37,6 @@ function getDatesUntilEndOfNextMonth(dayIndex: number): Date[] {
   return dates
 }
 
-function fmtDate(date: Date): string {
-  return date.toLocaleDateString('es-AR', {
-    weekday: 'short', day: 'numeric', month: 'short',
-    timeZone: 'UTC',
-  })
-}
-
 // ── Server Actions ─────────────────────────────────────────────────────────────
 
 async function addScheduleAction(formData: FormData) {
@@ -64,11 +58,21 @@ async function addScheduleAction(formData: FormData) {
   // También crear el ClassScheduleTemplate para que el cron lo use en meses futuros
   const DOW_MAP = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'] as const
   const dayOfWeek = DOW_MAP[dayIndex]
-  await prisma.classScheduleTemplate.upsert({
-    where: { studioId_classTypeId_dayOfWeek_time: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time } },
-    update: { active: true },
-    create: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time },
+  // findFirst + create/update para soportar roomId nullable en constraint compuesto
+  const existingTemplate = await prisma.classScheduleTemplate.findFirst({
+    where: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time, roomId: null },
+    select: { id: true },
   })
+  if (existingTemplate) {
+    await prisma.classScheduleTemplate.update({
+      where: { id: existingTemplate.id },
+      data: { active: true },
+    })
+  } else {
+    await prisma.classScheduleTemplate.create({
+      data: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time },
+    })
+  }
 
   await prisma.classSession.createMany({
     data: dates.map((date) => ({ studioId, classTypeId, date, time })),
@@ -148,7 +152,7 @@ export default async function OnboardingStep3({
                   {s.classType.name}
                 </p>
                 <p className="text-xs" style={{ color: 'var(--stone)' }}>
-                  {fmtDate(s.date)} · {s.time}
+                  {fmtDateAR(s.date)} · {s.time}
                 </p>
               </div>
             ))}

@@ -39,6 +39,15 @@
   }
 }
 
+/* Modo oscuro por estudio (activado vía clase .studio-dark en el layout) */
+.studio-dark {
+  --cream: #1C1A18;
+  --ink: #F0EDE8;
+  --stone: #A89888;
+  --background: #1C1A18;
+  --foreground: #F0EDE8;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

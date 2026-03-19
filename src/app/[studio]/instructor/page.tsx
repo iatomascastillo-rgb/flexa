@@ -3,15 +3,9 @@ import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
+import { todayARStart, fmtTime } from '@/lib/formatters'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function todayARStart(): Date {
-  const now = new Date()
-  const arMs = now.getTime() + -3 * 60 * 60_000
-  const ar = new Date(arMs)
-  return new Date(Date.UTC(ar.getUTCFullYear(), ar.getUTCMonth(), ar.getUTCDate()))
-}
 
 function currentARTimeMinutes(): number {
   const now = new Date()
@@ -23,11 +17,6 @@ function currentARTimeMinutes(): number {
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number)
   return h * 60 + m
-}
-
-function fmtTime(time: string): string {
-  const [h, m] = time.split(':')
-  return `${parseInt(h)}:${m}`
 }
 
 type SessionStatus = 'past' | 'current' | 'next' | 'upcoming'

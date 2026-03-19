@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
+import { getActiveClassTypes } from '@/lib/cache'
 import RecurringManager from './RecurringManager'
 
 export default async function RecurrenciaPage({
@@ -39,11 +40,7 @@ export default async function RecurrenciaPage({
       orderBy: { createdAt: 'asc' },
     }),
     // Tipos de clase disponibles
-    prisma.classType.findMany({
-      where: { studioId: tenant.studioId, active: true },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true },
-    }),
+    getActiveClassTypes(tenant.studioId),
     // Horarios reales: mes actual + próximo mes como fallback si el cron no corrió aún
     // Sin distinct para evitar problemas con Prisma+Postgres — el cliente deduplica con Set
     prisma.classSession.findMany({

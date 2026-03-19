@@ -229,10 +229,13 @@ export async function generateForStudio(
 ): Promise<Omit<StudioResult, 'studioId'> & { decisions?: ScheduleDecision[] }> {
 
   // Una sola ronda de queries en paralelo
-  const [templates, classTypes, settings, schedules] = await Promise.all([
+  const monthStart = new Date(Date.UTC(year, month, 1))
+  const monthEnd = new Date(Date.UTC(year, month + 1, 0))
+
+  const [templates, classTypes, settings, schedules, holidays] = await Promise.all([
     prisma.classScheduleTemplate.findMany({
       where: { studioId, active: true },
-      select: { classTypeId: true, dayOfWeek: true, time: true, instructorName: true },
+      select: { classTypeId: true, dayOfWeek: true, time: true, instructorName: true, roomId: true },
     }),
     prisma.classType.findMany({
       where: { studioId, active: true },
@@ -246,7 +249,19 @@ export async function generateForStudio(
       where: { studioId, active: true },
       select: { id: true, userId: true, classTypeId: true, dayOfWeek: true, time: true },
     }),
+    // Feriados del mes con política NO_CLASSES
+    prisma.studioHoliday.findMany({
+      where: {
+        studioId,
+        policy: 'NO_CLASSES',
+        date: { gte: monthStart, lte: monthEnd },
+      },
+      select: { date: true },
+    }),
   ])
+
+  // Set de timestamps UTC de días sin clases (para O(1) lookup)
+  const holidaySet = new Set(holidays.map((h) => h.date.getTime()))
 
   const classTypeMap = new Map(classTypes.map((ct) => [ct.id, ct.name]))
 
@@ -262,18 +277,20 @@ export async function generateForStudio(
   //   Para estudios que aún no tienen templates. Solo genera los slots
   //   que al menos una alumna tiene configurados como recurrencia.
 
-  const slotsByDow = new Map<number, Array<{ time: string; classTypeId: string; instructorName: string | null }>>()
+  const slotsByDow = new Map<number, Array<{ time: string; classTypeId: string; instructorName: string | null; roomId: string | null }>>()
 
   const source = templates.length > 0 ? templates : schedules
   for (const item of source) {
     const dow = DAY_OF_WEEK_TO_UTC[item.dayOfWeek]
     if (!slotsByDow.has(dow)) slotsByDow.set(dow, [])
     const existing = slotsByDow.get(dow)!
-    if (!existing.some((e) => e.time === item.time && e.classTypeId === item.classTypeId)) {
+    const roomId = 'roomId' in item ? (item.roomId ?? null) : null
+    if (!existing.some((e) => e.time === item.time && e.classTypeId === item.classTypeId && e.roomId === roomId)) {
       existing.push({
         time: item.time,
         classTypeId: item.classTypeId,
         instructorName: 'instructorName' in item ? (item.instructorName ?? null) : null,
+        roomId,
       })
     }
   }
@@ -282,13 +299,16 @@ export async function generateForStudio(
   if (slotsByDow.size > 0) {
     const allDays = getAllDaysOfMonth(year, month)
     const sessionsToCreate = allDays.flatMap((date) => {
+      // Saltar días feriados con política NO_CLASSES
+      if (holidaySet.has(date.getTime())) return []
       const dow = date.getUTCDay()
-      return (slotsByDow.get(dow) ?? []).map(({ time, classTypeId, instructorName }) => ({
+      return (slotsByDow.get(dow) ?? []).map(({ time, classTypeId, instructorName, roomId }) => ({
         studioId,
         date,
         time,
         classTypeId,
         instructorName: instructorName ?? null,
+        roomId: roomId ?? null,
       }))
     })
 
@@ -326,20 +346,24 @@ export async function generateForStudio(
   const startOfMonth = opts.fromDate ?? new Date(Date.UTC(year, month, 1))
   const startOfNextMonth = new Date(Date.UTC(year, month + 1, 1))
 
-  for (const schedule of schedules) {
-    const matchingSessions = await prisma.classSession.findMany({
-      where: {
-        studioId,
-        classTypeId: schedule.classTypeId,
-        time: schedule.time,
-        cancelledAt: null,
-        date: { gte: startOfMonth, lt: startOfNextMonth },
-      },
-      select: { id: true, date: true },
-    })
+  // Traemos TODAS las sesiones del mes en una sola query y filtramos en memoria
+  const allMonthSessions = await prisma.classSession.findMany({
+    where: {
+      studioId,
+      cancelledAt: null,
+      date: { gte: startOfMonth, lt: startOfNextMonth },
+    },
+    select: { id: true, date: true, classTypeId: true, time: true },
+  })
 
+  for (const schedule of schedules) {
     const targetDow = DAY_OF_WEEK_TO_UTC[schedule.dayOfWeek]
-    const sessions = matchingSessions.filter((s) => s.date.getUTCDay() === targetDow)
+    const sessions = allMonthSessions.filter(
+      (s) =>
+        s.classTypeId === schedule.classTypeId &&
+        s.time === schedule.time &&
+        s.date.getUTCDay() === targetDow,
+    )
 
     const decision: ScheduleDecision = {
       scheduleId: schedule.id,

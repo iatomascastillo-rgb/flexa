@@ -1,8 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminAPI } from '@/lib/auth-guards'
 import { adminAdjustCredits } from '@/services/credit.service'
 
 /**
@@ -16,25 +15,9 @@ export async function POST(
 ): Promise<NextResponse> {
   const { studio } = await params
 
-  // ── Autenticación ────────────────────────────────────────────────────────
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  }
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
-  }
-
-  // ── Tenant ────────────────────────────────────────────────────────────────
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) {
-    return NextResponse.json({ error: 'Estudio no encontrado' }, { status: 404 })
-  }
-
-  // studioId del admin verificado contra el tenant — nunca del body
-  if (session.user.studioId !== tenant.studioId) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
-  }
+  const guard = await requireStudioAdminAPI(studio)
+  if (!guard.ok) return guard.response
+  const { studioId, session } = guard
 
   // ── Body ─────────────────────────────────────────────────────────────────
   let body: { studentUserId?: unknown; amount?: unknown; note?: unknown }
@@ -61,7 +44,7 @@ export async function POST(
     const result = await adminAdjustCredits({
       adminUserId: session.user.id,
       studentUserId,
-      studioId: tenant.studioId,
+      studioId,
       amount,
       note: note.trim(),
     })

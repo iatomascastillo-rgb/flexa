@@ -1,8 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { notFound, redirect } from 'next/navigation'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage } from '@/lib/auth-guards'
 import RecurrenciasRunner from './RecurrenciasRunner'
 
 export default async function RecurrenciasAdminPage({
@@ -12,17 +10,7 @@ export default async function RecurrenciasAdminPage({
 }) {
   const { studio } = await params
 
-  const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/admin/recurrencias`)
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.role === 'STUDIO_ADMIN' && session.user.studioId !== tenant.studioId) {
-    redirect(`/${studio}`)
-  }
+  const { studioId } = await requireStudioAdminPage(studio)
 
   return (
     <div className="mx-auto max-w-2xl px-4 pt-8 pb-24">
@@ -36,7 +24,7 @@ export default async function RecurrenciasAdminPage({
         Ejecutá manualmente el cron de recurrencias para un mes específico.
       </p>
 
-      <RecurrenciasRunner studioId={tenant.studioId} />
+      <RecurrenciasRunner studioId={studioId} />
     </div>
   )
 }

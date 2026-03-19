@@ -1,6 +1,4 @@
-import { notFound, redirect } from 'next/navigation'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
 import { BrandingForm } from './_BrandingForm'
 
@@ -11,24 +9,30 @@ export default async function BrandingSettingsPage({
 }) {
   const { studio } = await params
 
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
+  const { studioId } = await requireStudioAdminPage(studio)
 
   const [studioData, branding] = await Promise.all([
     prisma.studio.findUnique({
-      where: { id: tenant.studioId },
+      where: { id: studioId },
       select: { name: true },
     }),
     prisma.studioBranding.findUnique({
-      where: { studioId: tenant.studioId },
-      select: { primaryColor: true, accentColor: true, logoUrl: true, welcomeMessage: true },
+      where: { studioId },
+      select: {
+        primaryColor: true,
+        accentColor: true,
+        logoUrl: true,
+        welcomeMessage: true,
+        fontDisplay: true,
+        fontBody: true,
+        backgroundColor: true,
+        coverUrl: true,
+        darkMode: true,
+        navColor: true,
+        instagramUrl: true,
+        whatsappUrl: true,
+        websiteUrl: true,
+      },
     }),
   ])
 
@@ -41,6 +45,15 @@ export default async function BrandingSettingsPage({
         accentColor: branding?.accentColor ?? '#C4774A',
         logoUrl: branding?.logoUrl ?? null,
         welcomeMessage: branding?.welcomeMessage ?? '',
+        fontDisplay: branding?.fontDisplay ?? 'cormorant',
+        fontBody: branding?.fontBody ?? 'dm_sans',
+        backgroundColor: branding?.backgroundColor ?? '#F7F3EE',
+        coverUrl: branding?.coverUrl ?? null,
+        darkMode: branding?.darkMode ?? false,
+        navColor: branding?.navColor ?? '',
+        instagramUrl: branding?.instagramUrl ?? '',
+        whatsappUrl: branding?.whatsappUrl ?? '',
+        websiteUrl: branding?.websiteUrl ?? '',
       }}
     />
   )

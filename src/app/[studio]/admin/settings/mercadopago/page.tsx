@@ -1,8 +1,7 @@
-import { notFound, redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage, checkStudioAdmin } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
 
 // ── Server Actions ─────────────────────────────────────────────────────────────
@@ -12,12 +11,9 @@ async function saveMpTokenAction(formData: FormData) {
   const studio = formData.get('studio') as string
   const token = (formData.get('mpAccessToken') as string)?.trim()
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
 
   // Validar que el token tenga el formato correcto de MP (APP_USR- o TEST-)
   if (token && !token.startsWith('APP_USR-') && !token.startsWith('TEST-')) {
@@ -25,10 +21,10 @@ async function saveMpTokenAction(formData: FormData) {
   }
 
   await prisma.studioSettings.upsert({
-    where: { studioId: tenant.studioId },
+    where: { studioId },
     update: { mpAccessToken: token || null },
     create: {
-      studioId: tenant.studioId,
+      studioId,
       mpAccessToken: token || null,
     },
   })
@@ -48,16 +44,10 @@ export default async function MercadoPagoSettingsPage({
 }) {
   const [{ studio }, sp] = await Promise.all([params, searchParams])
 
-  const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/admin/settings/mercadopago`)
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') redirect(`/${studio}`)
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
+  const { studioId } = await requireStudioAdminPage(studio)
 
   const settings = await prisma.studioSettings.findUnique({
-    where: { studioId: tenant.studioId },
+    where: { studioId },
     select: { mpAccessToken: true },
   })
 

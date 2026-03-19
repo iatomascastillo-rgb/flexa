@@ -1,4 +1,4 @@
-import { Cormorant_Garamond, DM_Sans } from 'next/font/google'
+import { Cormorant_Garamond, DM_Sans, Playfair_Display, Lora, EB_Garamond, Inter, Nunito, Lato } from 'next/font/google'
 import { prisma } from '@/lib/prisma'
 import { getTenantBySlug } from '@/lib/tenant'
 import { auth } from '@/lib/auth'
@@ -16,6 +16,67 @@ const dmSans = DM_Sans({
   weight: ['400', '500', '600'],
 })
 
+const playfair = Playfair_Display({
+  variable: '--font-playfair',
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+})
+
+const lora = Lora({
+  variable: '--font-lora',
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+})
+
+const ebGaramond = EB_Garamond({
+  variable: '--font-eb-garamond',
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+})
+
+const inter = Inter({
+  variable: '--font-inter',
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+})
+
+const nunito = Nunito({
+  variable: '--font-nunito',
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+})
+
+const lato = Lato({
+  variable: '--font-lato',
+  subsets: ['latin'],
+  weight: ['400', '700'],
+})
+
+const FONT_DISPLAY_MAP: Record<string, string> = {
+  cormorant: 'var(--font-cormorant)',
+  playfair: 'var(--font-playfair)',
+  lora: 'var(--font-lora)',
+  eb_garamond: 'var(--font-eb-garamond)',
+}
+
+const FONT_BODY_MAP: Record<string, string> = {
+  dm_sans: 'var(--font-dm-sans)',
+  inter: 'var(--font-inter)',
+  nunito: 'var(--font-nunito)',
+  lato: 'var(--font-lato)',
+}
+
+const ALL_FONT_CLASSES = [
+  cormorant.variable,
+  dmSans.variable,
+  playfair.variable,
+  lora.variable,
+  ebGaramond.variable,
+  inter.variable,
+  nunito.variable,
+  lato.variable,
+].join(' ')
+
 // ── Layout ────────────────────────────────────────────────────────────────────
 
 export default async function StudioLayout({
@@ -27,7 +88,6 @@ export default async function StudioLayout({
 }) {
   const { studio } = await params
 
-  // Branding del estudio (no bloquea si no existe)
   const [tenant, session] = await Promise.all([
     getTenantBySlug(studio).catch(() => null),
     auth(),
@@ -45,7 +105,6 @@ export default async function StudioLayout({
       const yesterdayUTC = new Date(todayUTC.getTime() - 86_400_000)
       const nowMin = ar.getUTCHours() * 60 + ar.getUTCMinutes()
 
-      // Sesiones de ayer + hoy (hasta hora actual -30min)
       const pastSessions = await prisma.classSession.findMany({
         where: {
           studioId: tenant.studioId,
@@ -66,7 +125,6 @@ export default async function StudioLayout({
         .map((s) => s.id)
 
       if (pastIds.length > 0) {
-        // Contar bookings confirmadas sin attendanceStatus por sesión
         const unregistered = await prisma.booking.groupBy({
           by: ['classSessionId'],
           where: {
@@ -78,7 +136,7 @@ export default async function StudioLayout({
           _count: { id: true },
           having: { id: { _count: { gt: 0 } } },
         })
-        instructorPending = unregistered.length // cantidad de sesiones con pendientes
+        instructorPending = unregistered.length
       }
     } catch {
       // No bloquear el layout si falla
@@ -88,35 +146,52 @@ export default async function StudioLayout({
   const branding = tenant
     ? await prisma.studioBranding.findUnique({
         where: { studioId: tenant.studioId },
-        select: { primaryColor: true, accentColor: true },
+        select: {
+          primaryColor: true,
+          accentColor: true,
+          fontDisplay: true,
+          fontBody: true,
+          backgroundColor: true,
+          darkMode: true,
+          navColor: true,
+        },
       }).catch(() => null)
     : null
 
-  // Construir override de CSS variables solo si el estudio tiene branding propio
-  const brandingStyle: React.CSSProperties = {}
+  // Construir override de CSS variables
+  const brandingStyle: Record<string, string> = {}
   if (branding?.primaryColor) {
-    // --sage es el color primario en todo el sistema de diseño
-    ;(brandingStyle as Record<string, string>)['--sage'] = branding.primaryColor
-    // Variante más clara: mezclar con blanco a ~60% — aproximación via hex
-    ;(brandingStyle as Record<string, string>)['--sage-light'] = branding.primaryColor + 'CC'
+    brandingStyle['--sage'] = branding.primaryColor
+    brandingStyle['--sage-light'] = branding.primaryColor + 'CC'
   }
   if (branding?.accentColor) {
-    ;(brandingStyle as Record<string, string>)['--terracotta'] = branding.accentColor
-    ;(brandingStyle as Record<string, string>)['--terracotta-light'] = branding.accentColor + '28'
+    brandingStyle['--terracotta'] = branding.accentColor
+    brandingStyle['--terracotta-light'] = branding.accentColor + '28'
   }
+  if (branding?.backgroundColor) {
+    brandingStyle['--cream'] = branding.backgroundColor
+  }
+  if (branding?.fontDisplay && FONT_DISPLAY_MAP[branding.fontDisplay]) {
+    brandingStyle['--font-display'] = FONT_DISPLAY_MAP[branding.fontDisplay]
+  }
+  if (branding?.fontBody && FONT_BODY_MAP[branding.fontBody]) {
+    brandingStyle['--font-body'] = FONT_BODY_MAP[branding.fontBody]
+  }
+
+  const darkModeClass = branding?.darkMode ? ' studio-dark' : ''
 
   return (
     <div
-      className={`${cormorant.variable} ${dmSans.variable}`}
-      style={brandingStyle}
+      className={`${ALL_FONT_CLASSES}${darkModeClass}`}
+      style={brandingStyle as React.CSSProperties}
     >
       <main
         className="min-h-screen pb-20"
-        style={{ background: 'var(--cream)', fontFamily: 'var(--font-dm-sans, sans-serif)' }}
+        style={{ background: 'var(--cream)', fontFamily: 'var(--font-body, var(--font-dm-sans, sans-serif))' }}
       >
         {children}
       </main>
-      <BottomNav studio={studio} role={role} pendingCount={instructorPending} />
+      <BottomNav studio={studio} role={role} pendingCount={instructorPending} navColor={branding?.navColor ?? undefined} />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { getStudioSettings } from '@/lib/cache'
 import { cancelBooking } from '@/services/booking.service'
 import { AppError } from '@/types/errors'
+import { fmtTime, fmtDateAR } from '@/lib/formatters'
 
 // ── Server Action: Cancelar reserva ──────────────────────────────────────────
 
@@ -51,22 +52,6 @@ function toUTCMs(date: Date, time: string): number {
   return Date.UTC(y, mo, d, h + 3, m, 0) // UTC-3 → +3hs
 }
 
-/** Formatea fecha de sesión (campo @db.Date = medianoche UTC) */
-function fmtDate(date: Date): string {
-  return date.toLocaleDateString('es-AR', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  })
-}
-
-/** "09:00" → "9:00" */
-function fmtTime(time: string): string {
-  const [h, m] = time.split(':')
-  return `${parseInt(h)}:${m}`
-}
-
 /** Último día del mes a las 23:59, formateado "30 abr" */
 function fmtExpiry(date: Date): string {
   return date.toLocaleDateString('es-AR', {
@@ -102,7 +87,7 @@ export default async function HomePage({
   const now = new Date()
 
   // ── Fetch en paralelo ─────────────────────────────────────────────────────
-  const [creditPackages, settings, graceCount, upcomingBookings, pendingPackage] =
+  const [creditPackages, settings, graceCount, upcomingBookings, pendingPackage, branding] =
     await Promise.all([
       // Paquetes con créditos disponibles (FIFO)
       prisma.userPackage.findMany({
@@ -158,6 +143,12 @@ export default async function HomePage({
           package: { select: { name: true, price: true } },
         },
       }),
+
+      // Branding: portada + redes sociales
+      prisma.studioBranding.findUnique({
+        where: { studioId },
+        select: { coverUrl: true, instagramUrl: true, whatsappUrl: true, websiteUrl: true },
+      }).catch(() => null),
     ])
 
   // ── Calcular créditos ─────────────────────────────────────────────────────
@@ -165,6 +156,14 @@ export default async function HomePage({
   const primaryPkg = creditPackages[0] // FIFO: el que vence antes
   // Créditos de recuperación activos (pueden ser varios)
   const recoveryPackages = creditPackages.filter(p => p.isRecovery)
+
+  // ── Alerta de créditos por vencer (entre 0 y 3 días) ─────────────────────
+  // Solo paquetes que AÚN no vencieron (msUntilExpiry > 0) y vencen en ≤3 días
+  const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
+  const expiringPackage = creditPackages.find((p) => {
+    const msUntilExpiry = p.expiresAt.getTime() - now.getTime()
+    return msUntilExpiry > 0 && msUntilExpiry <= THREE_DAYS_MS
+  })
   const progressPct = primaryPkg
     ? Math.round((primaryPkg.classesRemaining / primaryPkg.classesTotal) * 100)
     : 0
@@ -182,6 +181,14 @@ export default async function HomePage({
 
   return (
     <div className="mx-auto max-w-md px-4 pt-8">
+      {/* ── Portada / Banner ── */}
+      {branding?.coverUrl && (
+        <div className="-mx-4 -mt-8 mb-6 h-40 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={branding.coverUrl} alt="Portada" className="h-full w-full object-cover" />
+        </div>
+      )}
+
       {/* Saludo */}
       <p className="mb-1 text-sm" style={{ color: 'var(--stone)', fontFamily: 'var(--font-dm-sans, sans-serif)' }}>
         Bienvenida
@@ -192,6 +199,31 @@ export default async function HomePage({
       >
         {userName}
       </h1>
+
+      {/* ── Banner créditos por vencer ── */}
+      {expiringPackage && (() => {
+        const daysLeft = Math.ceil((expiringPackage.expiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+        return (
+          <Link
+            href={`/${studio}/paquetes`}
+            className="mb-4 flex items-center justify-between rounded-2xl px-4 py-3 transition-opacity hover:opacity-80"
+            style={{ background: '#FFF3E0', border: '1px solid #F4A535' }}
+          >
+            <div className="flex items-center gap-3">
+              <span style={{ fontSize: '18px' }}>⏳</span>
+              <div>
+                <p className="text-sm font-medium" style={{ color: '#92400E' }}>
+                  Tu paquete vence en {daysLeft} día{daysLeft !== 1 ? 's' : ''}
+                </p>
+                <p className="text-xs" style={{ color: '#B45309' }}>
+                  Te quedan {expiringPackage.classesRemaining} crédito
+                  {expiringPackage.classesRemaining !== 1 ? 's' : ''} · Renovar →
+                </p>
+              </div>
+            </div>
+          </Link>
+        )
+      })()}
 
       {/* ── Tarjeta de créditos ── */}
       <section
@@ -328,7 +360,7 @@ export default async function HomePage({
                 key={booking.id}
                 bookingId={booking.id}
                 studio={studio}
-                date={fmtDate(booking.classSession.date)}
+                date={fmtDateAR(booking.classSession.date)}
                 time={fmtTime(booking.classSession.time)}
                 className={booking.classSession.classType.name}
                 isGrace={booking.userPackageId === null}
@@ -338,6 +370,48 @@ export default async function HomePage({
           </div>
         )}
       </section>
+
+      {/* ── Redes sociales ── */}
+      {(branding?.instagramUrl || branding?.whatsappUrl || branding?.websiteUrl) && (
+        <section className="mb-4 flex gap-3">
+          {branding.instagramUrl && (
+            <a
+              href={branding.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-medium transition-opacity hover:opacity-75"
+              style={{ background: 'white', border: '1px solid #E8E0D6', color: 'var(--stone)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+              Instagram
+            </a>
+          )}
+          {branding.whatsappUrl && (
+            <a
+              href={branding.whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-medium transition-opacity hover:opacity-75"
+              style={{ background: 'white', border: '1px solid #E8E0D6', color: 'var(--stone)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16.92z"/></svg>
+              WhatsApp
+            </a>
+          )}
+          {branding.websiteUrl && (
+            <a
+              href={branding.websiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-medium transition-opacity hover:opacity-75"
+              style={{ background: 'white', border: '1px solid #E8E0D6', color: 'var(--stone)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              Web
+            </a>
+          )}
+        </section>
+      )}
 
       {/* ── Plan activo ── */}
       {primaryPkg && (

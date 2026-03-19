@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { fmtDateShort } from '@/lib/formatters'
 
 // ── Server Actions ─────────────────────────────────────────────────────────────
 
@@ -116,7 +117,8 @@ async function deleteSaasPaymentAction(formData: FormData) {
   const session = await auth()
   if (session?.user?.role !== 'SUPER_ADMIN') return
 
-  await prisma.saasPayment.delete({ where: { id: paymentId } })
+  // deleteMany con studioId en el WHERE — verifica pertenencia atómicamente
+  await prisma.saasPayment.deleteMany({ where: { id: paymentId, studioId } })
   revalidatePath(`/superadmin/estudios/${studioId}`)
 }
 
@@ -206,10 +208,6 @@ async function setAiInsightTrialAction(formData: FormData) {
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return '—'
   return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })
-}
-
-function fmtDateShort(d: Date): string {
-  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' })
 }
 
 const statusColor: Record<string, string> = {

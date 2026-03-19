@@ -2,6 +2,23 @@ import { unstable_cache } from 'next/cache'
 import { prisma } from './prisma'
 
 /**
+ * Tipos de clase activos del estudio — cambian raramente, cache de 1h.
+ * Solo para uso en páginas de UI. El cron usa Prisma directo.
+ */
+export function getActiveClassTypes(studioId: string) {
+  return unstable_cache(
+    async () =>
+      prisma.classType.findMany({
+        where: { studioId, active: true },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+    [`class-types-${studioId}`],
+    { revalidate: 3600 },
+  )()
+}
+
+/**
  * Settings del estudio — cambian raramente, cache de 1 hora.
  * Invalidar con: revalidateTag(`settings-${studioId}`)
  */

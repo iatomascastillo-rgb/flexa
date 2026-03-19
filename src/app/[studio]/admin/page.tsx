@@ -5,28 +5,7 @@ import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
 import { getMonthlyAdminMetrics } from '@/lib/cache'
 import { InsightCard } from '@/components/InsightCard'
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function fmtTime(time: string): string {
-  const [h, m] = time.split(':')
-  return `${parseInt(h)}:${m}`
-}
-
-function fmtARS(n: number): string {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    maximumFractionDigits: 0,
-  }).format(n)
-}
-
-function todayARStart(): Date {
-  const now = new Date()
-  const arMs = now.getTime() + -3 * 60 * 60_000
-  const ar = new Date(arMs)
-  return new Date(Date.UTC(ar.getUTCFullYear(), ar.getUTCMonth(), ar.getUTCDate()))
-}
+import { fmtTime, fmtARS, todayARStart } from '@/lib/formatters'
 
 const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
@@ -531,6 +510,7 @@ export default async function AdminDashboardPage({
                 { href: `/${studio}/admin/sesiones`, label: 'Sesiones', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg> },
                 { href: `/${studio}/admin/settings/branding`, label: 'Apariencia', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r="2.5" /><circle cx="6.5" cy="13.5" r="2.5" /><circle cx="17" cy="17" r="2.5" /><circle cx="3" cy="3" r="2" /></svg> },
                 { href: `/${studio}/admin/settings/politicas`, label: 'Políticas', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="4" y1="21" y2="14" /><line x1="4" x2="4" y1="10" y2="3" /><line x1="12" x2="12" y1="21" y2="12" /><line x1="12" x2="12" y1="8" y2="3" /><line x1="20" x2="20" y1="21" y2="16" /><line x1="20" x2="20" y1="12" y2="3" /><line x1="1" x2="7" y1="14" y2="14" /><line x1="9" x2="15" y1="8" y2="8" /><line x1="17" x2="23" y1="16" y2="16" /></svg> },
+                { href: `/${studio}/admin/settings/feriados`, label: 'Feriados y cierres', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /><line x1="8" x2="8" y1="14" y2="14" /><line x1="12" x2="12" y1="14" y2="14" /><line x1="16" x2="16" y1="14" y2="14" /></svg> },
               ].map(({ href, label, icon }) => (
                 <Link
                   key={href}

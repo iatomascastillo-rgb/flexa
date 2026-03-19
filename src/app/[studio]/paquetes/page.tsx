@@ -31,8 +31,9 @@ export default async function PaquetesPage({
   const session = await auth()
   if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/paquetes`)
 
-  // Solo alumnos acceden a esta página
-  if (session.user.role !== 'STUDENT') redirect(`/${studio}`)
+  // Admins van a la gestión de paquetes; instructores vuelven al inicio
+  if (session.user.role === 'STUDIO_ADMIN') redirect(`/${studio}/admin/settings/paquetes`)
+  if (session.user.role === 'INSTRUCTOR') redirect(`/${studio}`)
 
   const tenant = await getTenantBySlug(studio)
   if (!tenant) notFound()

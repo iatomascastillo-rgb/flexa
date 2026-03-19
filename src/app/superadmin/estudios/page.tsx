@@ -1,9 +1,6 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
-
-function fmtDate(d: Date): string {
-  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' })
-}
+import { fmtDateShort } from '@/lib/formatters'
 
 const statusColor: Record<string, string> = {
   TRIAL: '#5C7A5E',
@@ -145,7 +142,7 @@ export default async function SuperAdminStudiosPage({
                 <span style={{ fontSize: '13px', color: '#A0A0A0' }}>{s._count.users}</span>
 
                 {/* Fecha registro */}
-                <span style={{ fontSize: '12px', color: '#555' }}>{fmtDate(s.createdAt)}</span>
+                <span style={{ fontSize: '12px', color: '#555' }}>{fmtDateShort(s.createdAt)}</span>
 
                 {/* Acción */}
                 <Link

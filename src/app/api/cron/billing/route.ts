@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendEmail, type EmailTemplate } from '@/lib/email'
+import { todayARStart } from '@/lib/formatters'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -11,14 +12,6 @@ function daysBetween(dateA: Date, dateB: Date): number {
   const msA = Date.UTC(dateA.getFullYear(), dateA.getMonth(), dateA.getDate())
   const msB = Date.UTC(dateB.getFullYear(), dateB.getMonth(), dateB.getDate())
   return Math.floor((msB - msA) / (1000 * 60 * 60 * 24))
-}
-
-/** Fecha de hoy en zona Argentina (UTC-3), normalizada a medianoche UTC */
-function todayAR(): Date {
-  const now = new Date()
-  // Argentina: UTC-3 fijo (sin DST)
-  const ar = new Date(now.getTime() - 3 * 60 * 60 * 1000)
-  return new Date(Date.UTC(ar.getUTCFullYear(), ar.getUTCMonth(), ar.getUTCDate()))
 }
 
 async function sendBillingEmail(
@@ -50,7 +43,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const today = todayAR()
+  const today = todayARStart()
   const results: StudioResult[] = []
 
   // ── Obtener suscripciones activas ─────────────────────────────────────────

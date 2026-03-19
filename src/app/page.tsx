@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { HowItWorks } from '@/components/HowItWorks'
+import { AnimatedLogo } from '@/components/AnimatedLogo'
 
 // ── Datos ──────────────────────────────────────────────────────────────────────
 
@@ -11,35 +11,6 @@ const STATS = [
   { value: 'Todo el día', label: 'Soporte disponible' },
 ]
 
-const PAINS = [
-  {
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" />
-      </svg>
-    ),
-    title: 'No sabés cómo está tu estudio de verdad',
-    body: 'Sin datos claros no podés saber cuántas alumnas están activas, cuánto facturaste realmente ni qué clases son rentables.',
-  },
-  {
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-    ),
-    title: 'Cancelaciones y recuperos sin control',
-    body: 'Los créditos se pierden, las deudas se olvidan y la política de gracia se gestiona con mensajes que nadie ve.',
-  },
-  {
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
-      </svg>
-    ),
-    title: 'Experiencia desprolija para tus alumnas',
-    body: 'Sin un sistema propio, el estudio no transmite la profesionalidad que merece. La experiencia es la misma que la de cualquier grupo de WhatsApp.',
-  },
-]
 
 const FEATURES = [
   {
@@ -58,7 +29,7 @@ const FEATURES = [
       </svg>
     ),
     title: 'Créditos automáticos',
-    body: 'El sistema descuenta créditos al reservar y los devuelve al cancelar. Sin errores, sin planillas.',
+    body: 'El sistema descuenta créditos al reservar y los devuelve al cancelar. El plazo para cancelar y recuperar el crédito es configurable.',
   },
   {
     icon: (
@@ -84,8 +55,8 @@ const FEATURES = [
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
       </svg>
     ),
-    title: 'Período de gracia configurable',
-    body: 'Definís cuántos días puede asistir una alumna antes de pagar. El corte es automático.',
+    title: 'Días de acceso sin crédito',
+    body: 'Definís cuántos días puede asistir una alumna después de quedarse sin créditos. Al vencerse, el sistema bloquea el acceso automáticamente o te avisa para que lo gestiones vos.',
   },
   {
     icon: (
@@ -93,8 +64,8 @@ const FEATURES = [
         <path d="M18 20V10" /><path d="M12 20V4" /><path d="M6 20v-6" />
       </svg>
     ),
-    title: 'Análisis inteligente',
-    body: 'Cada mes tu estudio te habla: quién se está alejando, qué clases funcionan, cuánto creciste.',
+    title: 'Inteligencia artificial para tomar decisiones',
+    body: 'La IA analiza reservas, pagos y asistencia, y te dice qué hacer: a quién contactar, qué clase reforzar, cómo retener alumnas. Sin dashboards, en palabras simples.',
   },
 ]
 
@@ -117,7 +88,7 @@ const AI_INSIGHTS = [
 ]
 
 const CUSTOMIZATIONS = [
-  { title: 'Período de gracia', body: 'Cuántos días puede asistir una alumna antes de pagar. El corte es automático.' },
+  { title: 'Días de acceso sin crédito', body: 'Cuántos días puede asistir una alumna después de quedarse sin créditos. El bloqueo es automático.' },
   { title: 'Política de cancelación', body: 'Elegís si liberar el lugar a lista de espera o mantenerlo con alerta.' },
   { title: 'Branding propio', body: 'Colores, logo y nombre del estudio. Tus alumnas ven tu marca, no la nuestra.' },
   { title: 'Tipos de clase y cupos', body: 'Reformer, Mat, Duet, grupal. Cada tipo con su capacidad y sus reglas.' },
@@ -126,12 +97,10 @@ const CUSTOMIZATIONS = [
 ]
 
 const COMPARISON_ROWS = [
-  { label: 'Idioma', generic: 'Español (básico)', intl: 'Inglés', flexa: 'Español argentino' },
   { label: 'Pagos', generic: 'Transferencia manual', intl: 'Sin MercadoPago', flexa: 'MercadoPago directo' },
   { label: 'Análisis de tu negocio', generic: 'No existe', intl: 'Reportes básicos', flexa: 'IA que interpreta y sugiere' },
-  { label: 'Precio', generic: '—', intl: 'USD 129+/mes', flexa: 'ARS accesible' },
-  { label: 'Soporte', generic: 'Ninguno', intl: 'Tickets en inglés', flexa: 'Equipo local todo el día' },
-  { label: 'Hecho para pilates boutique', generic: 'No', intl: 'No (genérico)', flexa: 'Diseñado para esto' },
+  { label: 'Precio', generic: '—', intl: '$45.000/mes', flexa: 'ARS accesible' },
+  { label: 'Hecho para pilates', generic: 'No', intl: 'No (genérico)', flexa: 'Diseñado para esto' },
 ]
 
 const TESTIMONIALS = [
@@ -148,7 +117,7 @@ const TESTIMONIALS = [
   {
     name: 'Lucía T.',
     studio: 'Movimiento Boutique, Rosario',
-    quote: 'El período de gracia configurable fue clave para mí. Antes perdía alumnas por no tener flexibilidad. Ahora cada estudio lo maneja a su manera y el sistema lo controla solo.',
+    quote: 'Los días de acceso sin crédito fueron clave para mí. Antes perdía alumnas por no tener flexibilidad. Ahora cada estudio lo maneja a su manera y el sistema lo controla solo.',
   },
 ]
 
@@ -158,7 +127,7 @@ const BASIC_FEATURES = [
   'Pagos con MercadoPago',
   'Lista de espera automática',
   'Branding personalizado',
-  'Período de gracia configurable',
+  'Días de acceso sin crédito (configurable)',
   'Notificaciones automáticas por email',
   'Resumen mensual automático',
   'Soporte de equipo todo el día',
@@ -183,8 +152,8 @@ const FAQS = [
     a: 'Las alumnas pagan sus paquetes directamente en tu cuenta de MercadoPago. Vos configurás tu access token y el dinero va directo a tu billetera. Flexa no toca el dinero ni cobra comisión por transacción.',
   },
   {
-    q: '¿Qué es el período de gracia y cómo se configura?',
-    a: 'Es el tiempo que una alumna puede asistir a clases antes de tener que pagar. Vos definís cuántos días permite tu estudio y qué pasa al vencimiento: Flexa puede liberar su lugar automáticamente o mandarte una alerta para que gestiones vos.',
+    q: '¿Qué son los días de acceso sin crédito?',
+    a: 'Es el tiempo que una alumna puede seguir asistiendo después de quedarse sin créditos. Vos definís cuántos días permite tu estudio y qué pasa al vencimiento: Flexa puede bloquear el acceso automáticamente o mandarte una alerta para que lo gestiones vos.',
   },
   {
     q: '¿En qué consiste el análisis inteligente?',
@@ -212,11 +181,8 @@ export default function LandingPage() {
         style={{ background: 'rgba(247,243,238,0.95)', backdropFilter: 'blur(12px)', borderColor: '#E8E0D6' }}
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-2.5">
-            <Image src="/flexa-logo.svg" alt="Flexa" width={32} height={32} />
-            <span className="text-xl font-light" style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}>
-              Flexa
-            </span>
+          <div className="flex items-center">
+            <AnimatedLogo height={42} />
           </div>
           <nav className="flex items-center gap-3">
             <Link href="/login" className="rounded-xl px-4 py-2 text-sm font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--stone)' }}>
@@ -231,6 +197,9 @@ export default function LandingPage() {
 
       {/* ── Hero ── */}
       <section className="mx-auto max-w-5xl px-5 py-20 text-center md:py-28">
+        <div className="mb-6 flex justify-center">
+          <AnimatedLogo height={110} withText pulse />
+        </div>
         <p
           className="mb-4 inline-block rounded-full px-4 py-1.5 text-xs font-medium uppercase tracking-widest"
           style={{ background: '#EDF4ED', color: 'var(--sage)' }}
@@ -241,13 +210,12 @@ export default function LandingPage() {
           className="mb-6 text-5xl font-light leading-tight md:text-7xl"
           style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
         >
-          Gestioná, entendé
+          <span style={{ color: '#9B6DFF', fontWeight: 700 }}>Gestión inteligente</span> para
           <br />
-          <em className="not-italic" style={{ color: 'var(--sage)' }}>y hacé crecer tu estudio</em>
+          <em className="not-italic" style={{ color: 'var(--sage)' }}>tu estudio de Pilates</em>
         </h1>
         <p className="mx-auto mb-10 max-w-lg text-lg leading-relaxed" style={{ color: 'var(--stone)' }}>
-          Reservas, créditos, pagos integrados y análisis inteligente en un solo lugar.
-          La plataforma diseñada para estudios de pilates boutique en Argentina.
+          Flexa automatiza reservas, pagos y te ayuda a tomar mejores decisiones con IA, sin complicaciones.
         </p>
         <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Link
@@ -265,9 +233,9 @@ export default function LandingPage() {
         {/* Dual mockup: alumna (izq) + admin (der) */}
         <div className="mx-auto mt-16 flex flex-col items-center gap-6 md:flex-row md:items-end md:justify-center md:gap-6">
 
-          {/* Phone: vista alumna */}
+          {/* Phone: vista alumno */}
           <div className="w-52 shrink-0">
-            <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Vista alumna</p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Vista alumno</p>
             <div
               className="overflow-hidden rounded-[1.8rem] p-1"
               style={{ background: '#2C2C2C', boxShadow: '0 16px 48px rgba(0,0,0,0.16)' }}
@@ -332,12 +300,19 @@ export default function LandingPage() {
               {/* AI recommendation */}
               <div className="px-4 py-4">
                 <div className="mb-3 rounded-xl p-3.5" style={{ background: 'rgba(155,109,255,0.08)', border: '1px solid rgba(155,109,255,0.2)' }}>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span style={{ color: '#9B6DFF', fontSize: '11px' }}>✦</span>
-                    <p className="text-xs font-medium" style={{ color: '#9B6DFF' }}>Análisis de Marzo</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <span style={{ color: '#9B6DFF', fontSize: '11px' }}>✦</span>
+                      <p className="text-xs font-medium" style={{ color: '#9B6DFF' }}>IA Flexa · Marzo</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: '#FEF3C7', color: '#92400E' }}>
+                      ⚠ Riesgo de abandono
+                    </span>
                   </div>
                   <p className="text-xs leading-relaxed" style={{ color: 'var(--stone)' }}>
-                    4 alumnas no reservaron en 2 semanas. Contactarlas hoy puede retener al menos la mitad.
+                    4 alumnas llevan más de 2 semanas sin venir. Contactarlas hoy puede recuperar al menos 2.
                   </p>
                 </div>
                 {/* Student list */}
@@ -375,35 +350,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Problema ── */}
-      <section className="py-20" style={{ background: 'white' }}>
-        <div className="mx-auto max-w-5xl px-5">
-          <p className="mb-2 text-center text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--terracotta)' }}>
-            El problema
-          </p>
-          <h2
-            className="mb-4 text-center text-4xl font-light md:text-5xl"
-            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
-          >
-            Gestionar un estudio es más
-            <br />complejo de lo que parece
-          </h2>
-          <p className="mx-auto mb-14 max-w-md text-center text-base" style={{ color: 'var(--stone)' }}>
-            Sin la información correcta, tomás decisiones a ciegas. Y eso tiene un costo.
-          </p>
-          <div className="grid gap-6 md:grid-cols-3">
-            {PAINS.map((p, i) => (
-              <div key={i} className="rounded-2xl p-6" style={{ background: 'var(--cream)', border: '1px solid #E8E0D6' }}>
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full" style={{ background: 'var(--terracotta-light)', color: 'var(--terracotta)' }}>
-                  {p.icon}
-                </div>
-                <h3 className="mb-2 text-lg font-medium" style={{ color: 'var(--ink)' }}>{p.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--stone)' }}>{p.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ── Cómo funciona (interactivo) ── */}
       <section id="como-funciona" className="py-20" style={{ background: 'var(--cream)' }}>
@@ -455,20 +401,25 @@ export default function LandingPage() {
       <section style={{ background: 'var(--ink)' }}>
         <div className="mx-auto max-w-5xl px-5 py-24">
           <div className="mb-16 text-center">
-            <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: '#9B6DFF' }}>
-              Análisis inteligente
-            </p>
+            <div className="mb-4 flex items-center justify-center gap-3">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest"
+                style={{ background: 'rgba(155,109,255,0.18)', color: '#9B6DFF', border: '1px solid rgba(155,109,255,0.3)' }}
+              >
+                ✦ Inteligencia Artificial
+              </span>
+            </div>
             <h2
               className="mb-4 text-4xl font-light text-white md:text-5xl"
               style={{ fontFamily: 'var(--font-cormorant, serif)' }}
             >
               Tu estudio genera datos.
               <br />
-              <em className="not-italic" style={{ color: '#9B6DFF' }}>Flexa los convierte en decisiones.</em>
+              <em className="not-italic" style={{ color: '#9B6DFF' }}>La IA los convierte en decisiones.</em>
             </h2>
             <p className="mx-auto max-w-lg text-base text-white/60">
-              No necesitás saber de análisis ni de tecnología. Flexa procesa los datos de tu estudio
-              y te entrega diagnósticos claros cada mes, como si tuvieras un socio de negocio propio.
+              Cada mes, la inteligencia artificial de Flexa analiza reservas, pagos y asistencia,
+              y genera un diagnóstico en palabras simples: qué está pasando, por qué, y qué hacer.
             </p>
           </div>
 
@@ -479,12 +430,15 @@ export default function LandingPage() {
                 className="rounded-2xl p-6"
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)' }}
               >
-                <span
-                  className="mb-4 inline-block rounded-full px-3 py-1 text-xs font-medium"
-                  style={{ background: 'rgba(155,109,255,0.15)', color: '#9B6DFF' }}
-                >
-                  {insight.tag}
-                </span>
+                <div className="mb-4 flex items-center justify-between">
+                  <span
+                    className="inline-block rounded-full px-3 py-1 text-xs font-medium"
+                    style={{ background: 'rgba(155,109,255,0.15)', color: '#9B6DFF' }}
+                  >
+                    {insight.tag}
+                  </span>
+                  <span className="text-xs" style={{ color: 'rgba(155,109,255,0.5)' }}>✦ IA</span>
+                </div>
                 <h3 className="mb-3 text-lg font-medium text-white">{insight.title}</h3>
                 <p
                   className="text-sm leading-relaxed italic"
@@ -497,7 +451,7 @@ export default function LandingPage() {
           </div>
 
           <p className="mt-10 text-center text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>
-            El análisis inteligente está disponible en el Plan Pro · Se genera automáticamente cada mes
+            Diagnósticos generados automáticamente con IA cada mes · Disponible en Plan Pro
           </p>
         </div>
       </section>
@@ -551,10 +505,10 @@ export default function LandingPage() {
             style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
           >
             Hecho para Argentina,
-            <br />hecho para pilates
+            <br />hecho para pilates.
           </h2>
           <p className="mx-auto mb-14 max-w-md text-center text-base" style={{ color: 'var(--stone)' }}>
-            Las apps internacionales no están pensadas para estudios boutique en Argentina. Flexa sí.
+            Las apps genéricas no están pensadas para estudios de pilates en Argentina. Flexa sí.
           </p>
           <div className="overflow-hidden rounded-2xl" style={{ border: '1px solid #E8E0D6' }}>
             <div className="grid grid-cols-4" style={{ borderBottom: '1px solid #E8E0D6' }}>
@@ -563,7 +517,7 @@ export default function LandingPage() {
                 <p className="text-xs font-medium" style={{ color: 'var(--stone)' }}>Planilla<br />+ WhatsApp</p>
               </div>
               <div className="px-4 py-4 text-center" style={{ background: 'var(--cream)', borderLeft: '1px solid #E8E0D6' }}>
-                <p className="text-xs font-medium" style={{ color: 'var(--stone)' }}>Apps<br />internacionales</p>
+                <p className="text-xs font-medium" style={{ color: 'var(--stone)' }}>Apps</p>
               </div>
               <div className="px-4 py-4 text-center" style={{ background: '#EDF4ED', borderLeft: '1px solid #E8E0D6' }}>
                 <p className="text-xs font-medium" style={{ color: 'var(--sage)' }}>Flexa ✓</p>
@@ -715,7 +669,7 @@ export default function LandingPage() {
             <br />todo el día
           </h2>
           <p className="mx-auto mb-10 max-w-sm text-base leading-relaxed" style={{ color: 'var(--stone)' }}>
-            Nuestro equipo está disponible para resolver cualquier duda, siempre en español.
+            Nuestro equipo está disponible para resolver cualquier duda que tengas.
             Si algo no funciona como esperás, lo resolvemos con vos.
           </p>
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
@@ -771,9 +725,8 @@ export default function LandingPage() {
       <footer className="py-10" style={{ background: 'var(--ink)' }}>
         <div className="mx-auto max-w-5xl px-5">
           <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-between">
-            <div className="flex items-center gap-2">
-              <Image src="/flexa-logo.svg" alt="Flexa" width={24} height={24} />
-              <span className="text-xl font-light text-white/80" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>Flexa</span>
+            <div className="flex items-center">
+              <AnimatedLogo height={34} />
             </div>
             <nav className="flex flex-wrap justify-center gap-6">
               {[

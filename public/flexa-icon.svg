@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Top face: parallelogram that gives the 3D depth to the horizontal arm -->
+  <polygon points="14,3 82,3 76,19 20,19" fill="#C084FC"/>
+  <!-- Main F body: top arm front face + vertical stroke (single connected path) -->
+  <path d="M14,19 L76,19 L76,37 L32,37 L32,90 L14,90 Z" fill="#9333EA"/>
+  <!-- Middle arm -->
+  <polygon points="32,49 70,49 64,62 32,62" fill="#9333EA"/>
+  <!-- Right-face triangle of middle arm (creates 3D depth) -->
+  <polygon points="64,49 70,49 64,62" fill="#6D28D9"/>
+</svg>

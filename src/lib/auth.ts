@@ -7,7 +7,7 @@ import type { Role } from '@prisma/client'
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   trustHost: true,
-  session: { strategy: 'jwt', maxAge: 60 * 24 * 60 * 60 }, // 60 días
+  session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 }, // 30 días
 
   providers: [
     Credentials({
@@ -49,6 +49,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const valid = await bcrypt.compare(String(credentials.password), user.passwordHash)
         if (!valid) return null
+
+        // Lazy re-hash: migra hashes de cost=10 a cost=8 en el próximo login
+        if (bcrypt.getRounds(user.passwordHash) > 8) {
+          const newHash = await bcrypt.hash(String(credentials.password), 8)
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { passwordHash: newHash },
+          }).catch(() => {}) // silent fail — reintenta en el siguiente login
+        }
 
         return {
           id: user.id,

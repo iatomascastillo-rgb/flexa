@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 122" fill="none">
+  <!-- Top face parallelogram -->
+  <polygon points="14,3 82,3 76,19 20,19" fill="#C084FC"/>
+  <!-- Main F body -->
+  <path d="M14,19 L76,19 L76,37 L32,37 L32,90 L14,90 Z" fill="#9333EA"/>
+  <!-- Middle arm -->
+  <polygon points="32,49 70,49 64,62 32,62" fill="#9333EA"/>
+  <!-- Middle arm depth triangle -->
+  <polygon points="64,49 70,49 64,62" fill="#6D28D9"/>
+  <!-- FLEXA wordmark -->
+  <text
+    x="50" y="114"
+    text-anchor="middle"
+    font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+    font-weight="900"
+    font-size="16"
+    letter-spacing="4"
+    fill="#111111"
+  >FLEXA</text>
+</svg>

@@ -1,8 +1,6 @@
-import { redirect, notFound } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage, checkStudioAdmin } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
 
 // ── Server Actions ──────────────────────────────────────────────────────────────
@@ -15,17 +13,14 @@ async function addClassTypeAction(formData: FormData) {
   const level = (formData.get('level') as string)?.trim()
   const defaultCapacity = parseInt(formData.get('defaultCapacity') as string, 10)
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
   if (!name || isNaN(defaultCapacity) || defaultCapacity < 1) return
 
   await prisma.classType.create({
     data: {
-      studioId: tenant.studioId,
+      studioId,
       name,
       description: description || null,
       level: level || null,
@@ -45,16 +40,13 @@ async function editClassTypeAction(formData: FormData) {
   const level = (formData.get('level') as string)?.trim()
   const defaultCapacity = parseInt(formData.get('defaultCapacity') as string, 10)
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
   if (!name || isNaN(defaultCapacity) || defaultCapacity < 1) return
 
   await prisma.classType.update({
-    where: { id: classTypeId, studioId: tenant.studioId },
+    where: { id: classTypeId, studioId },
     data: {
       name,
       description: description || null,
@@ -72,15 +64,12 @@ async function toggleClassTypeAction(formData: FormData) {
   const classTypeId = formData.get('classTypeId') as string
   const currentActive = formData.get('currentActive') === 'true'
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
 
   await prisma.classType.update({
-    where: { id: classTypeId, studioId: tenant.studioId },
+    where: { id: classTypeId, studioId },
     data: { active: !currentActive },
   })
 
@@ -96,18 +85,10 @@ export default async function AdminClasesSettingsPage({
 }) {
   const { studio } = await params
 
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
+  const { studioId } = await requireStudioAdminPage(studio)
 
   const classTypes = await prisma.classType.findMany({
-    where: { studioId: tenant.studioId },
+    where: { studioId },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,

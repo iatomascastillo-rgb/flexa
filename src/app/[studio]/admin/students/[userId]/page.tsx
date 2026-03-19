@@ -1,11 +1,11 @@
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage, checkStudioAdmin } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
 import { adminAdjustCredits } from '@/services/credit.service'
 import { sendEmail } from '@/lib/email'
+import { fmtDateShort, fmtDateTime } from '@/lib/formatters'
 
 // ── Server Actions ─────────────────────────────────────────────────────────────
 
@@ -15,21 +15,18 @@ async function toggleActiveAction(formData: FormData) {
   const studentUserId = formData.get('studentUserId') as string
   const currentActive = formData.get('currentActive') === 'true'
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId, session } = guard
 
   await prisma.$transaction(async (tx) => {
     await tx.user.update({
-      where: { id: studentUserId, studioId: tenant.studioId },
+      where: { id: studentUserId, studioId },
       data: { active: !currentActive },
     })
     await tx.auditLog.create({
       data: {
-        studioId: tenant.studioId,
+        studioId,
         userId: session.user.id,
         action: currentActive ? 'USER_DEACTIVATED' : 'USER_REACTIVATED',
         entityType: 'User',
@@ -50,25 +47,22 @@ async function assignPackageAction(formData: FormData) {
   const packageId = formData.get('packageId') as string
   const paymentMethod = formData.get('paymentMethod') as string
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId, session } = guard
   if (!['CASH', 'TRANSFER'].includes(paymentMethod)) return
 
   const [pkg, student, studioData] = await Promise.all([
     prisma.package.findUnique({
-      where: { id: packageId, studioId: tenant.studioId, active: true },
+      where: { id: packageId, studioId, active: true },
       select: { classCount: true, name: true },
     }),
     prisma.user.findUnique({
-      where: { id: studentUserId, studioId: tenant.studioId },
+      where: { id: studentUserId, studioId },
       select: { email: true, name: true },
     }),
     prisma.studio.findUnique({
-      where: { id: tenant.studioId },
+      where: { id: studioId },
       select: { name: true },
     }),
   ])
@@ -81,7 +75,7 @@ async function assignPackageAction(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const userPkg = await tx.userPackage.create({
       data: {
-        studioId: tenant.studioId,
+        studioId,
         userId: studentUserId,
         packageId,
         paymentMethod: paymentMethod as 'CASH' | 'TRANSFER',
@@ -97,7 +91,7 @@ async function assignPackageAction(formData: FormData) {
 
     await tx.creditTransaction.create({
       data: {
-        studioId: tenant.studioId,
+        studioId,
         userPackageId: userPkg.id,
         type: 'PURCHASE',
         amount: pkg.classCount,
@@ -109,7 +103,7 @@ async function assignPackageAction(formData: FormData) {
 
     await tx.auditLog.create({
       data: {
-        studioId: tenant.studioId,
+        studioId,
         userId: session.user.id,
         action: 'PACKAGE_ASSIGNED_MANUALLY',
         entityType: 'UserPackage',
@@ -147,27 +141,24 @@ async function changeRoleAction(formData: FormData) {
 
   if (!['STUDENT', 'INSTRUCTOR'].includes(newRole)) return
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId, session } = guard
 
   const target = await prisma.user.findUnique({
-    where: { id: studentUserId, studioId: tenant.studioId },
+    where: { id: studentUserId, studioId },
     select: { role: true },
   })
   if (!target) return
 
   await prisma.$transaction([
     prisma.user.update({
-      where: { id: studentUserId, studioId: tenant.studioId },
+      where: { id: studentUserId, studioId },
       data: { role: newRole as 'STUDENT' | 'INSTRUCTOR' },
     }),
     prisma.auditLog.create({
       data: {
-        studioId: tenant.studioId,
+        studioId,
         userId: session.user.id,
         action: 'USER_ROLE_CHANGED',
         entityType: 'User',
@@ -189,12 +180,9 @@ async function adjustCreditsAction(formData: FormData) {
   const amountRaw = formData.get('amount') as string
   const note = formData.get('note') as string
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId, session } = guard
 
   const amount = parseInt(amountRaw, 10)
   if (isNaN(amount) || amount === 0) return
@@ -204,7 +192,7 @@ async function adjustCreditsAction(formData: FormData) {
     await adminAdjustCredits({
       adminUserId: session.user.id,
       studentUserId,
-      studioId: tenant.studioId,
+      studioId,
       amount,
       note: note.trim(),
     })
@@ -215,27 +203,6 @@ async function adjustCreditsAction(formData: FormData) {
   revalidatePath(`/${studio}/admin/students/${studentUserId}`)
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmtDate(date: Date): string {
-  return date.toLocaleDateString('es-AR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'America/Argentina/Buenos_Aires',
-  })
-}
-
-function fmtDateTime(date: Date): string {
-  return date.toLocaleString('es-AR', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'America/Argentina/Buenos_Aires',
-  })
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function AdminStudentPage({
@@ -244,16 +211,7 @@ export default async function AdminStudentPage({
   params: Promise<{ studio: string; userId: string }>
 }) {
   const { studio, userId } = await params
-  const session = await auth()
-
-  if (!session?.user?.id) redirect('/login')
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') redirect('/login')
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
-
-  const studioId = tenant.studioId
+  const { studioId } = await requireStudioAdminPage(studio)
   const now = new Date()
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
@@ -393,7 +351,7 @@ export default async function AdminStudentPage({
               {student.active ? 'Activa' : 'Inactiva'}
             </span>
             <span className="text-xs" style={{ color: 'var(--stone)' }}>
-              · desde {fmtDate(student.createdAt)}
+              · desde {fmtDateShort(student.createdAt)}
             </span>
             <form action={toggleActiveAction}>
               <input type="hidden" name="studio" value={studio} />
@@ -419,7 +377,7 @@ export default async function AdminStudentPage({
             {totalCredits}
           </span>
           {activePackages.length > 0 && (
-            <p className="mt-2 text-xs opacity-60">vence {fmtDate(activePackages[0].expiresAt)}</p>
+            <p className="mt-2 text-xs opacity-60">vence {fmtDateShort(activePackages[0].expiresAt)}</p>
           )}
         </div>
         <div className="rounded-2xl p-4" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
@@ -444,7 +402,7 @@ export default async function AdminStudentPage({
                   <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
                     {pkg.package?.name ?? 'Paquete manual'}
                   </p>
-                  <p className="text-xs" style={{ color: 'var(--stone)' }}>Vence {fmtDate(pkg.expiresAt)}</p>
+                  <p className="text-xs" style={{ color: 'var(--stone)' }}>Vence {fmtDateShort(pkg.expiresAt)}</p>
                 </div>
                 <div className="text-right">
                   <span className="text-2xl font-light" style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--sage)' }}>
@@ -474,7 +432,7 @@ export default async function AdminStudentPage({
                       {pkg.package?.name ?? 'Paquete manual'}
                     </p>
                     <p className="text-xs" style={{ color: 'var(--stone)' }}>
-                      {fmtDate(pkg.createdAt)} · {pkg.classesTotal} clases
+                      {fmtDateShort(pkg.createdAt)} · {pkg.classesTotal} clases
                     </p>
                   </div>
                   <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: s.bg, color: s.color }}>

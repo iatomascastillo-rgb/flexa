@@ -137,9 +137,9 @@ export async function POST(
     })
   } catch (err) {
     console.error('[insights] Error generando insight:', err)
-    // Pasar el mensaje del error directo — son mensajes user-safe del servicio
-    // o errores del SDK de Anthropic (útiles para debug)
-    const message = err instanceof Error
+    // Propagar mensajes del servicio (user-safe), bloquear errores del SDK o internos
+    const isSafeMsg = err instanceof Error && err.name !== 'APIError' && err.name !== 'AnthropicError'
+    const message = isSafeMsg && err.message
       ? err.message
       : 'Error al generar el análisis. Intentá de nuevo.'
     return NextResponse.json({ error: message }, { status: 422 })

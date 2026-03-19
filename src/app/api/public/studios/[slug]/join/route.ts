@@ -35,11 +35,22 @@ export async function POST(
       { status: 422 },
     )
   }
+  if (password.length > 72) {
+    return NextResponse.json(
+      { error: 'La contraseña no puede superar 72 caracteres', field: 'password' },
+      { status: 422 },
+    )
+  }
 
   // ── Verificar que el estudio existe y está activo ─────────────────────────
   const studio = await prisma.studio.findUnique({
     where: { slug },
-    select: { id: true, name: true, active: true },
+    select: {
+      id: true,
+      name: true,
+      active: true,
+      settings: { select: { trialCreditEnabled: true } },
+    },
   })
 
   if (!studio || !studio.active) {
@@ -58,24 +69,58 @@ export async function POST(
     )
   }
 
-  // ── Crear alumna ──────────────────────────────────────────────────────────
-  const passwordHash = await bcrypt.hash(password, 10)
+  // ── Crear alumna + crédito de prueba (en una sola transacción) ───────────
+  const passwordHash = await bcrypt.hash(password, 8)
 
   try {
-    const user = await prisma.user.create({
-      data: {
-        studioId: studio.id,
-        email: email.toLowerCase().trim(),
-        passwordHash,
-        name: name.trim(),
-        phone: phone?.trim() || null,
-        role: 'STUDENT',
-        active: true,
-      },
-      select: { id: true },
+    const user = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          studioId: studio.id,
+          email: email.toLowerCase().trim(),
+          passwordHash,
+          name: name.trim(),
+          phone: phone?.trim() || null,
+          role: 'STUDENT',
+          active: true,
+        },
+        select: { id: true },
+      })
+
+      // Crédito de prueba — dentro de la misma transacción
+      if (studio.settings?.trialCreditEnabled) {
+        const now = new Date()
+        const trialExpiresAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59))
+        const trialPkg = await tx.userPackage.create({
+          data: {
+            studioId: studio.id,
+            userId: newUser.id,
+            paymentMethod: 'ADMIN_GRANT',
+            paymentStatus: 'APPROVED',
+            classesTotal: 1,
+            classesRemaining: 1,
+            activatedAt: now,
+            expiresAt: trialExpiresAt,
+            isTrial: true,
+          },
+          select: { id: true },
+        })
+        await tx.creditTransaction.create({
+          data: {
+            studioId: studio.id,
+            userPackageId: trialPkg.id,
+            type: 'ADMIN_ADJUSTMENT',
+            amount: 1,
+            balanceAfter: 1,
+            note: 'Clase de prueba gratuita',
+          },
+        })
+      }
+
+      return newUser
     })
 
-    console.log(`[join] Nueva alumna en ${slug}: userId=${user.id}`)
+    console.log(`[join] Nueva alumna en ${slug}: userId=${user.id}${studio.settings?.trialCreditEnabled ? ' (con crédito de prueba)' : ''}`)
 
     // Emails post-registro — en try/catch independiente para no bloquear la respuesta
     try {

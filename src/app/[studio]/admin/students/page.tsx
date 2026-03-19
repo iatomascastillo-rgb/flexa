@@ -1,19 +1,7 @@
-import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-}
+import { initials } from '@/lib/formatters'
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -22,26 +10,18 @@ export default async function AdminStudentsPage({
   searchParams,
 }: {
   params: Promise<{ studio: string }>
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{ q?: string; filtro?: string }>
 }) {
   const { studio } = await params
-  const { q } = await searchParams
+  const { q, filtro } = await searchParams
 
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
-
-  const studioId = tenant.studioId
+  const { studioId } = await requireStudioAdminPage(studio)
   const search = q?.trim() ?? ''
+  const soloTrialFilter = filtro === 'solo-prueba'
 
   // ── Fetch alumnos ──────────────────────────────────────────────────────────
+  // Traemos todos los paquetes APPROVED para poder filtrar por isTrial en app layer.
+  // El _count con where anidado no es confiable en todas las versiones — se evita.
   const students = await prisma.user.findMany({
     where: {
       studioId,
@@ -63,15 +43,27 @@ export default async function AdminStudentsPage({
       phone: true,
       active: true,
       userPackages: {
-        where: { paymentStatus: 'APPROVED', classesRemaining: { gt: 0 } },
-        select: { classesRemaining: true },
+        where: { paymentStatus: 'APPROVED' },
+        select: { classesRemaining: true, isTrial: true },
       },
     },
   })
 
-  const studentsWithCredits = students.map((s) => ({
+  // Filtrar "solo prueba": alumnos con al menos 1 trial y ningún paquete real (isTrial=false)
+  const filtered = soloTrialFilter
+    ? students.filter((s) => {
+        const hasTrial = s.userPackages.some((p) => p.isTrial)
+        const hasRealPackage = s.userPackages.some((p) => !p.isTrial)
+        return hasTrial && !hasRealPackage
+      })
+    : students
+
+  const studentsWithCredits = filtered.map((s) => ({
     ...s,
-    totalCredits: s.userPackages.reduce((sum, p) => sum + p.classesRemaining, 0),
+    // Solo contar paquetes con créditos disponibles
+    totalCredits: s.userPackages
+      .filter((p) => p.classesRemaining > 0)
+      .reduce((sum, p) => sum + p.classesRemaining, 0),
   }))
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -126,7 +118,7 @@ export default async function AdminStudentsPage({
       </div>
 
       {/* Búsqueda */}
-      <form method="GET" className="mb-5">
+      <form method="GET" className="mb-3">
         <input
           type="search"
           name="q"
@@ -136,6 +128,28 @@ export default async function AdminStudentsPage({
           style={{ borderColor: '#E8E0D6', background: 'white', color: 'var(--ink)' }}
         />
       </form>
+
+      {/* Filtros rápidos */}
+      <div className="mb-5 flex gap-2">
+        <Link
+          href={`/${studio}/admin/students${search ? `?q=${search}` : ''}`}
+          className="rounded-full px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+          style={!soloTrialFilter
+            ? { background: 'var(--ink)', color: 'white' }
+            : { background: 'white', color: 'var(--stone)', border: '1px solid #E8E0D6' }}
+        >
+          Todas
+        </Link>
+        <Link
+          href={`/${studio}/admin/students?filtro=solo-prueba${search ? `&q=${search}` : ''}`}
+          className="rounded-full px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+          style={soloTrialFilter
+            ? { background: 'var(--ink)', color: 'white' }
+            : { background: 'white', color: 'var(--stone)', border: '1px solid #E8E0D6' }}
+        >
+          Solo prueba gratis
+        </Link>
+      </div>
 
       {/* Lista */}
       {studentsWithCredits.length === 0 ? (

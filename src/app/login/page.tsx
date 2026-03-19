@@ -10,7 +10,12 @@ function LoginForm() {
   const searchParams = useSearchParams()
 
   // callbackUrl viene de NextAuth: "?callbackUrl=/centro-pilates"
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/'
+  // Validar que sea una ruta relativa para evitar open redirect
+  const rawCallback = searchParams.get('callbackUrl') ?? '/'
+  const callbackUrl =
+    rawCallback.startsWith('/') && !rawCallback.startsWith('//')
+      ? rawCallback
+      : '/'
 
   // Extraer slug solo si el primer segmento es un studio real, no una ruta reservada
   const RESERVED = new Set(['superadmin', 'api', 'auth', 'login', 'registro', 'auth-test'])

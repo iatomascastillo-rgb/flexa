@@ -1,0 +1,18 @@
+{
+  "name": "Flexa",
+  "short_name": "Flexa",
+  "description": "Gestión de estudios de Pilates",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F3EE",
+  "theme_color": "#5C7A5E",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/flexa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

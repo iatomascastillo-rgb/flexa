@@ -172,8 +172,7 @@ export async function POST(
       data: { paymentStatus: 'CANCELLED' },
     })
 
-    const errMsg = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: errMsg }, { status: 502 })
+    return NextResponse.json({ error: 'Error al procesar el pago. Intentá de nuevo o contactá soporte.' }, { status: 502 })
   }
 
   // MP_SANDBOX=true → usar sandbox_init_point (credenciales de prueba)

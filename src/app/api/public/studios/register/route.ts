@@ -40,6 +40,9 @@ export async function POST(request: NextRequest) {
   if (!password || password.length < 8) {
     return NextResponse.json({ error: 'La contraseña debe tener al menos 8 caracteres', field: 'password' }, { status: 422 })
   }
+  if (password.length > 72) {
+    return NextResponse.json({ error: 'La contraseña no puede superar 72 caracteres', field: 'password' }, { status: 422 })
+  }
   if (!studioName?.trim()) {
     return NextResponse.json({ error: 'El nombre del estudio es requerido', field: 'studioName' }, { status: 422 })
   }
@@ -71,7 +74,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Transaction: crear todo en un solo paso atómico ────────────────────────
-  const passwordHash = await bcrypt.hash(password, 10)
+  const passwordHash = await bcrypt.hash(password, 8)
   const trialEndsAt = new Date()
   trialEndsAt.setDate(trialEndsAt.getDate() + 14)
 

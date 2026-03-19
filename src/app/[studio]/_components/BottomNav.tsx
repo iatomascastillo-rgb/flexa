@@ -77,7 +77,7 @@ function ClipboardIcon({ active }: { active: boolean }) {
   )
 }
 
-export function BottomNav({ studio, role, pendingCount = 0 }: { studio: string; role: string; pendingCount?: number }) {
+export function BottomNav({ studio, role, pendingCount = 0, navColor }: { studio: string; role: string; pendingCount?: number; navColor?: string }) {
   const pathname = usePathname()
 
   // SUPER_ADMIN: nav simplificado hacia el panel de plataforma
@@ -116,7 +116,7 @@ export function BottomNav({ studio, role, pendingCount = 0 }: { studio: string; 
       { href: `/${studio}/perfil`, label: 'Perfil', icon: UserIcon },
     ]
     return (
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D6] bg-[#F7F3EE]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D6]" style={{ background: navColor ?? '#F7F3EE' }}>
         <div className="flex">
           {instructorLinks.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href || pathname.startsWith(href + '/')
@@ -158,7 +158,7 @@ export function BottomNav({ studio, role, pendingCount = 0 }: { studio: string; 
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D6] bg-[#F7F3EE]">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D6]" style={{ background: navColor ?? '#F7F3EE' }}>
       <div className="flex">
         {links.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href

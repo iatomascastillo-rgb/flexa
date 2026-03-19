@@ -4,20 +4,7 @@ import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
 import { AttendanceClient } from './AttendanceClient'
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function todayARStart(): Date {
-  const now = new Date()
-  const arMs = now.getTime() + -3 * 60 * 60_000
-  const ar = new Date(arMs)
-  return new Date(Date.UTC(ar.getUTCFullYear(), ar.getUTCMonth(), ar.getUTCDate()))
-}
-
-function fmtTime(time: string): string {
-  const [h, m] = time.split(':')
-  return `${parseInt(h)}:${m}`
-}
+import { todayARStart, fmtTime } from '@/lib/formatters'
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 

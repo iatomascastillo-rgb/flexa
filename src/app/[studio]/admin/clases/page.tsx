@@ -1,8 +1,6 @@
-import { redirect, notFound } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage, checkStudioAdmin } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
 import { ApplyRecurringButton } from './ApplyRecurringButton'
 
@@ -74,6 +72,41 @@ function getDatesUntilEndOfNextMonth(dayOfWeek: string): Date[] {
 
 // ── Server Actions ─────────────────────────────────────────────────────────────
 
+async function addRoomAction(formData: FormData) {
+  'use server'
+  const studio = formData.get('studio') as string
+  const name = (formData.get('name') as string)?.trim()
+
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
+  if (!name) return
+
+  await prisma.room.create({
+    data: { studioId, name },
+  })
+
+  revalidatePath(`/${studio}/admin/clases`)
+}
+
+async function toggleRoomAction(formData: FormData) {
+  'use server'
+  const studio = formData.get('studio') as string
+  const roomId = formData.get('roomId') as string
+  const currentActive = formData.get('currentActive') === 'true'
+
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
+
+  await prisma.room.update({
+    where: { id: roomId, studioId },
+    data: { active: !currentActive },
+  })
+
+  revalidatePath(`/${studio}/admin/clases`)
+}
+
 async function addClassTypeAction(formData: FormData) {
   'use server'
   const studio = formData.get('studio') as string
@@ -82,16 +115,13 @@ async function addClassTypeAction(formData: FormData) {
   const description = (formData.get('description') as string)?.trim()
   const defaultCapacity = parseInt(formData.get('defaultCapacity') as string, 10)
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
   if (!name || isNaN(defaultCapacity) || defaultCapacity < 1) return
 
   await prisma.classType.create({
-    data: { studioId: tenant.studioId, name, level: level || null, description: description || null, defaultCapacity },
+    data: { studioId, name, level: level || null, description: description || null, defaultCapacity },
   })
 
   revalidatePath(`/${studio}/admin/clases`)
@@ -103,15 +133,12 @@ async function toggleClassTypeAction(formData: FormData) {
   const classTypeId = formData.get('classTypeId') as string
   const currentActive = formData.get('currentActive') === 'true'
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
 
   await prisma.classType.update({
-    where: { id: classTypeId, studioId: tenant.studioId },
+    where: { id: classTypeId, studioId },
     data: { active: !currentActive },
   })
 
@@ -125,27 +152,34 @@ async function addScheduleTemplateAction(formData: FormData) {
   const dayOfWeek = formData.get('dayOfWeek') as string
   const time = formData.get('time') as string
   const instructorName = (formData.get('instructorName') as string)?.trim() || null
+  const roomId = (formData.get('roomId') as string) || null
 
-  const session = await auth()
-  if (!session?.user?.id || session.user.role !== 'STUDIO_ADMIN') return
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
   if (!classTypeId || !dayOfWeek || !time) return
 
-  const studioId = tenant.studioId
-
-  // Upsert del template permanente
-  await prisma.classScheduleTemplate.upsert({
-    where: { studioId_classTypeId_dayOfWeek_time: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time } },
-    update: { active: true, instructorName },
-    create: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time, instructorName },
+  // Upsert del template permanente (findFirst + create/update para soportar roomId nullable)
+  const existingTemplate = await prisma.classScheduleTemplate.findFirst({
+    where: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time, roomId },
+    select: { id: true },
   })
+  if (existingTemplate) {
+    await prisma.classScheduleTemplate.update({
+      where: { id: existingTemplate.id },
+      data: { active: true, instructorName, roomId },
+    })
+  } else {
+    await prisma.classScheduleTemplate.create({
+      data: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time, instructorName, roomId },
+    })
+  }
 
   // Generar sesiones hasta fin del mes siguiente (cubre todos los casos de onboarding).
   // skipDuplicates → idempotente, re-ejecutar es seguro.
   const dates = getDatesUntilEndOfNextMonth(dayOfWeek)
   await prisma.classSession.createMany({
-    data: dates.map((date) => ({ studioId, classTypeId, date, time, instructorName })),
+    data: dates.map((date) => ({ studioId, classTypeId, date, time, instructorName, roomId })),
     skipDuplicates: true,
   })
 
@@ -157,14 +191,13 @@ async function removeScheduleTemplateAction(formData: FormData) {
   const studio = formData.get('studio') as string
   const templateId = formData.get('templateId') as string
 
-  const session = await auth()
-  if (!session?.user?.id || session.user.role !== 'STUDIO_ADMIN') return
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || tenant.studioId !== session.user.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
 
   // Desactivar (soft-delete): el cron no la generará más, las sesiones existentes quedan
   await prisma.classScheduleTemplate.update({
-    where: { id: templateId, studioId: tenant.studioId },
+    where: { id: templateId, studioId },
     data: { active: false },
   })
 
@@ -180,19 +213,9 @@ export default async function AdminGestionarClasesPage({
 }) {
   const { studio } = await params
 
-  const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/admin/clases`)
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
+  const { studioId } = await requireStudioAdminPage(studio)
 
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
-
-  const studioId = tenant.studioId
-
-  const [classTypes, templates] = await Promise.all([
+  const [classTypes, templates, rooms] = await Promise.all([
     prisma.classType.findMany({
       where: { studioId },
       orderBy: { createdAt: 'asc' },
@@ -207,11 +230,18 @@ export default async function AdminGestionarClasesPage({
       select: {
         id: true, dayOfWeek: true, time: true, instructorName: true,
         classType: { select: { id: true, name: true } },
+        room: { select: { name: true } },
       },
+    }),
+    prisma.room.findMany({
+      where: { studioId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, active: true },
     }),
   ])
 
   const activeClassTypes = classTypes.filter((ct) => ct.active)
+  const activeRooms = rooms.filter((r) => r.active)
 
   // Ordenar templates por día de semana (Lunes primero)
   const sortedTemplates = [...templates].sort(
@@ -241,6 +271,73 @@ export default async function AdminGestionarClasesPage({
       <p className="mb-7 text-sm" style={{ color: 'var(--stone)' }}>
         Tipos de clase y horarios fijos. El cron genera las sesiones de cada mes automáticamente.
       </p>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          SECCIÓN 0: SALONES
+      ══════════════════════════════════════════════════════════════════ */}
+      <section className="mb-8">
+        <p className="mb-3 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+          Salones
+        </p>
+
+        {rooms.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {rooms.map((room) => (
+              <div
+                key={room.id}
+                className="flex items-center justify-between rounded-2xl px-4 py-3"
+                style={{
+                  background: 'white',
+                  border: '1px solid #E8E0D6',
+                  opacity: room.active ? 1 : 0.55,
+                }}
+              >
+                <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{room.name}</p>
+                <form action={toggleRoomAction}>
+                  <input type="hidden" name="studio" value={studio} />
+                  <input type="hidden" name="roomId" value={room.id} />
+                  <input type="hidden" name="currentActive" value={String(room.active)} />
+                  <button
+                    type="submit"
+                    className="shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80"
+                    style={room.active
+                      ? { background: '#EDF4ED', color: 'var(--sage)' }
+                      : { background: '#F5F0EB', color: 'var(--stone)' }}
+                  >
+                    {room.active ? 'Activo' : 'Inactivo'}
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="rounded-2xl p-4" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+          <p className="mb-3 text-xs font-medium" style={{ color: 'var(--stone)' }}>
+            {rooms.length === 0 ? 'Agregar salón (opcional)' : 'Agregar salón'}
+          </p>
+          <form action={addRoomAction} className="flex gap-2">
+            <input type="hidden" name="studio" value={studio} />
+            <input
+              type="text" name="name" required placeholder="ej: Sala A, Sala Reformer"
+              className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+              style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-xl px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80"
+              style={{ background: '#EDF4ED', color: 'var(--sage)' }}
+            >
+              + Agregar
+            </button>
+          </form>
+          {rooms.length === 0 && (
+            <p className="mt-2 text-xs" style={{ color: 'var(--stone)' }}>
+              Si tu estudio tiene un solo espacio no necesitás configurar salones.
+            </p>
+          )}
+        </div>
+      </section>
 
       {/* ══════════════════════════════════════════════════════════════════
           SECCIÓN 1: TIPOS DE CLASE
@@ -385,6 +482,7 @@ export default async function AdminGestionarClasesPage({
                       <p className="mt-0.5 text-xs" style={{ color: 'var(--stone)' }}>
                         {DAYS_ES[t.dayOfWeek]} · {t.time}
                         {t.instructorName ? ` · ${t.instructorName}` : ''}
+                        {t.room ? ` · ${t.room.name}` : ''}
                       </p>
                     </div>
                     <form action={removeScheduleTemplateAction}>
@@ -458,6 +556,22 @@ export default async function AdminGestionarClasesPage({
                     style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
                   />
                 </div>
+
+                {activeRooms.length > 0 && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Salón</label>
+                    <select
+                      name="roomId"
+                      className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+                      style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+                    >
+                      <option value="">Sin salón asignado</option>
+                      {activeRooms.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <button
                   type="submit"

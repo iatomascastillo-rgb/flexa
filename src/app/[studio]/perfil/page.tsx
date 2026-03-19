@@ -74,7 +74,7 @@ export default async function PerfilPage({
     const currentPassword = formData.get('currentPassword') as string
     const newPassword = formData.get('newPassword') as string
     const confirmPassword = formData.get('confirmPassword') as string
-    if (!currentPassword || !newPassword || newPassword.length < 8) {
+    if (!currentPassword || !newPassword || newPassword.length < 8 || newPassword.length > 72) {
       redirect(`/${studio}/perfil?error=password-corta`)
     }
     if (newPassword !== confirmPassword) {
@@ -89,7 +89,7 @@ export default async function PerfilPage({
     if (!user?.passwordHash) redirect(`/${studio}/perfil?error=password-actual`)
     const valid = await bcrypt.compare(currentPassword, user.passwordHash)
     if (!valid) redirect(`/${studio}/perfil?error=password-actual`)
-    const passwordHash = await bcrypt.hash(newPassword, 10)
+    const passwordHash = await bcrypt.hash(newPassword, 8)
     await prisma.user.update({
       where: { id: s.user.id, studioId: tenant.studioId },
       data: { passwordHash },
@@ -129,7 +129,7 @@ export default async function PerfilPage({
   const savedPassword = sp.saved === 'password'
   const errorMsg: Record<string, string> = {
     'nombre': 'El nombre no puede estar vacío.',
-    'password-corta': 'La nueva contraseña debe tener al menos 8 caracteres.',
+    'password-corta': 'La nueva contraseña debe tener entre 8 y 72 caracteres.',
     'password-mismatch': 'Las contraseñas no coinciden.',
     'password-actual': 'La contraseña actual es incorrecta.',
   }

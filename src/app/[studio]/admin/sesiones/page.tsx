@@ -1,9 +1,9 @@
-import { notFound, redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
-import { auth } from '@/lib/auth'
-import { getTenantBySlug } from '@/lib/tenant'
+import { requireStudioAdminPage, checkStudioAdmin } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
+import { getActiveClassTypes } from '@/lib/cache'
+import { fmtTime, fmtDateUTC } from '@/lib/formatters'
 
 // ── Server Actions ─────────────────────────────────────────────────────────────
 
@@ -13,43 +13,32 @@ async function createSessionAction(formData: FormData) {
   const classTypeId = formData.get('classTypeId') as string
   const dateStr = formData.get('date') as string   // "YYYY-MM-DD"
   const time = formData.get('time') as string      // "HH:mm"
+  const roomId = (formData.get('roomId') as string) || null
 
   if (!classTypeId || !dateStr || !time) return
 
-  const session = await auth()
-  if (!session?.user?.id) return
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') return
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant || session.user.studioId !== tenant.studioId) return
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
 
   const [y, m, d] = dateStr.split('-').map(Number)
   const date = new Date(Date.UTC(y, m - 1, d))
 
-  await prisma.classSession.upsert({
-    where: { studioId_date_time_classTypeId: { studioId: tenant.studioId, date, time, classTypeId } },
-    update: {},
-    create: { studioId: tenant.studioId, classTypeId, date, time },
+  // findFirst + create para soportar roomId nullable en constraint compuesto
+  const existingSession = await prisma.classSession.findFirst({
+    where: { studioId, date, time, classTypeId, roomId },
+    select: { id: true },
   })
+  if (!existingSession) {
+    await prisma.classSession.create({
+      data: { studioId, classTypeId, date, time, roomId },
+    })
+  }
 
   revalidatePath(`/${studio}/admin/sesiones`)
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-function fmtDateHeader(date: Date): string {
-  return date.toLocaleDateString('es-AR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  })
-}
-
-function fmtTime(time: string): string {
-  const [h, m] = time.split(':')
-  return `${parseInt(h)}:${m}`
-}
 
 function isToday(date: Date): boolean {
   const now = new Date()
@@ -72,17 +61,7 @@ export default async function AdminSesionesPage({
   const { studio } = await params
   const { rango = 'semana' } = await searchParams
 
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
-  if (session.user.role !== 'STUDIO_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-    redirect(`/${studio}`)
-  }
-
-  const tenant = await getTenantBySlug(studio)
-  if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect('/login')
-
-  const studioId = tenant.studioId
+  const { studioId } = await requireStudioAdminPage(studio)
   const now = new Date()
   const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 
@@ -91,12 +70,15 @@ export default async function AdminSesionesPage({
   const days = rangeDays[rango] ?? 7
   const rangeEnd = new Date(todayStart.getTime() + days * 24 * 60 * 60 * 1000)
 
-  // ── Fetch classTypes y sesiones ────────────────────────────────────────────
-  const classTypes = await prisma.classType.findMany({
-    where: { studioId, active: true },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  })
+  // ── Fetch classTypes, rooms y sesiones ────────────────────────────────────
+  const [classTypes, rooms] = await Promise.all([
+    getActiveClassTypes(studioId),
+    prisma.room.findMany({
+      where: { studioId, active: true },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ])
 
   // ── Fetch sesiones ─────────────────────────────────────────────────────────
   const rawSessions = await prisma.classSession.findMany({
@@ -112,6 +94,7 @@ export default async function AdminSesionesPage({
       cancelledAt: true,
       capacityOverride: true,
       classType: { select: { name: true, defaultCapacity: true } },
+      room: { select: { name: true } },
       bookings: {
         where: { status: { in: ['CONFIRMED', 'WAITLIST'] } },
         select: { status: true, attendanceStatus: true },
@@ -158,16 +141,29 @@ export default async function AdminSesionesPage({
             Sesiones
           </h1>
         </div>
-        <Link
-          href={`/${studio}/admin/clases`}
-          className="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium transition-opacity hover:opacity-80"
-          style={{ background: 'var(--sage)', color: 'white' }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14" /><path d="M5 12h14" />
-          </svg>
-          Agregar horarios
-        </Link>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/api/${studio}/admin/export/bookings`}
+            className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition-opacity hover:opacity-80"
+            style={{ background: 'white', color: 'var(--stone)', border: '1px solid #E8E0D6' }}
+            title="Exportar reservas a CSV"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            CSV
+          </a>
+          <Link
+            href={`/${studio}/admin/clases`}
+            className="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium transition-opacity hover:opacity-80"
+            style={{ background: 'var(--sage)', color: 'white' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14" /><path d="M5 12h14" />
+            </svg>
+            Agregar horarios
+          </Link>
+        </div>
       </div>
 
       {/* Filtro de rango */}
@@ -219,7 +215,7 @@ export default async function AdminSesionesPage({
                 className="mb-2 text-xs font-medium uppercase tracking-widest capitalize"
                 style={{ color: todayFlag ? 'var(--sage)' : 'var(--stone)' }}
               >
-                {todayFlag ? 'Hoy · ' : ''}{fmtDateHeader(daySessions[0].date)}
+                {todayFlag ? 'Hoy · ' : ''}{fmtDateUTC(daySessions[0].date)}
               </p>
 
               <div className="space-y-2">
@@ -257,6 +253,7 @@ export default async function AdminSesionesPage({
                           {s.confirmed}/{s.capacity} reservadas
                           {s.waitlist > 0 && ` · ${s.waitlist} en lista`}
                           {s.attended > 0 && ` · ${s.attended} asistieron`}
+                          {s.room && ` · ${s.room.name}`}
                         </p>
                       </div>
                     </div>
@@ -329,6 +326,21 @@ export default async function AdminSesionesPage({
                 />
               </div>
             </div>
+            {rooms.length > 0 && (
+              <div>
+                <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Salón</label>
+                <select
+                  name="roomId"
+                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
+                  style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+                >
+                  <option value="">Sin salón asignado</option>
+                  {rooms.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <button
               type="submit"
               className="w-full rounded-xl py-2.5 text-sm font-medium transition-opacity hover:opacity-80"

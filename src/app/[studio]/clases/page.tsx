@@ -8,6 +8,7 @@ import { getStudioSettings } from '@/lib/cache'
 import { createBooking, cancelBooking } from '@/services/booking.service'
 import { AppError } from '@/types/errors'
 import { SessionCard } from './SessionCard'
+import { fmtTime } from '@/lib/formatters'
 
 // ── Server Actions ─────────────────────────────────────────────────────────────
 
@@ -53,6 +54,14 @@ async function cancelClassAction(formData: FormData) {
   const tenant = await getTenantBySlug(studio)
   if (!tenant || tenant.studioId !== session.user.studioId) return
 
+  // Verificar ownership: el bookingId debe pertenecer al usuario autenticado
+  // Evita IDOR: un alumno no puede cancelar la reserva de otro alumno
+  const ownedBooking = await prisma.booking.findUnique({
+    where: { id: bookingId, userId: session.user.id, studioId: tenant.studioId },
+    select: { id: true },
+  })
+  if (!ownedBooking) return
+
   try {
     await cancelBooking({
       bookingId,
@@ -90,12 +99,6 @@ function fmtDayHeader(date: Date): { weekday: string; day: string } {
   return { weekday, day }
 }
 
-/** "09:00" → "9:00" */
-function fmtTime(time: string): string {
-  const [h, m] = time.split(':')
-  return `${parseInt(h)}:${m}`
-}
-
 // ── Mensajes de error ──────────────────────────────────────────────────────────
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -126,10 +129,10 @@ export default async function ClasesPage({
   searchParams,
 }: {
   params: Promise<{ studio: string }>
-  searchParams: Promise<{ error?: string; success?: string }>
+  searchParams: Promise<{ error?: string; success?: string; salon?: string }>
 }) {
   const { studio } = await params
-  const { error, success } = await searchParams
+  const { error, success, salon } = await searchParams
 
   const session = await auth()
   if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/clases`)
@@ -149,9 +152,15 @@ export default async function ClasesPage({
   const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 
   // ── Fetch en paralelo ──────────────────────────────────────────────────────
-  const [rawSessions, myBookings, settings] = await Promise.all([
+  const [rawSessions, myBookings, settings, rooms] = await Promise.all([
     prisma.classSession.findMany({
-      where: { studioId, date: { gte: todayStart }, cancelledAt: null },
+      where: {
+        studioId,
+        date: { gte: todayStart },
+        cancelledAt: null,
+        // Filtrar por salón si se pasó el query param (y no es "all")
+        ...(salon && salon !== 'all' ? { roomId: salon } : {}),
+      },
       orderBy: [{ date: 'asc' }, { time: 'asc' }],
       take: 60,
       select: {
@@ -161,6 +170,7 @@ export default async function ClasesPage({
         capacityOverride: true,
         classType: { select: { name: true, defaultCapacity: true, description: true } },
         instructorName: true,
+        room: { select: { name: true } },
         bookings: {
           where: { status: { in: ['CONFIRMED', 'WAITLIST'] } },
           select: { status: true },
@@ -180,6 +190,12 @@ export default async function ClasesPage({
 
     // Settings (cacheado 1h)
     getStudioSettings(studioId),
+
+    prisma.room.findMany({
+      where: { studioId, active: true },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'asc' },
+    }),
   ])
 
   // ── Procesar y filtrar sesiones ────────────────────────────────────────────
@@ -204,6 +220,7 @@ export default async function ClasesPage({
         className: s.classType.name,
         description: s.classType.description ?? null,
         instructorName: s.instructorName ?? null,
+        roomName: s.room?.name ?? null,
         capacity,
         confirmedCount,
         spotsLeft,
@@ -274,6 +291,37 @@ export default async function ClasesPage({
         </div>
       )}
 
+      {/* Room picker — solo si hay más de 1 salón activo */}
+      {rooms.length > 1 && (
+        <div className="mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
+          <Link
+            href={`/${studio}/clases`}
+            className="shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+            style={
+              !salon || salon === 'all'
+                ? { background: 'var(--sage)', color: 'white' }
+                : { background: 'white', color: 'var(--stone)', border: '1px solid #E8E0D6' }
+            }
+          >
+            Todos
+          </Link>
+          {rooms.map((r) => (
+            <Link
+              key={r.id}
+              href={`/${studio}/clases?salon=${r.id}`}
+              className="shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+              style={
+                salon === r.id
+                  ? { background: 'var(--sage)', color: 'white' }
+                  : { background: 'white', color: 'var(--stone)', border: '1px solid #E8E0D6' }
+              }
+            >
+              {r.name}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {/* Sin sesiones */}
       {dateKeys.length === 0 && (
         <div
@@ -323,6 +371,7 @@ export default async function ClasesPage({
                         className={s.className}
                         description={s.description}
                         instructorName={s.instructorName}
+                        roomName={s.roomName}
                         spotsLeft={s.spotsLeft}
                         capacity={s.capacity}
                         isBookable={s.isBookable}

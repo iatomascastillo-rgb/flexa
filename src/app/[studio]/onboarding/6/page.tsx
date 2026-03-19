@@ -1,5 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { randomBytes } from 'crypto'
 import { auth } from '@/lib/auth'
 import { getTenantBySlug } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
@@ -27,8 +28,9 @@ async function inviteStudentAction(formData: FormData) {
   if (existing) return
 
   // Crear con contraseña temporal (alumna deberá cambiarla — futuro flujo)
-  const tempPassword = Math.random().toString(36).slice(2, 10) + 'A1!'
-  const passwordHash = await bcrypt.hash(tempPassword, 10)
+  // Usar randomBytes en lugar de Math.random() para mayor entropía
+  const tempPassword = randomBytes(12).toString('base64url').slice(0, 12) + 'A1!'
+  const passwordHash = await bcrypt.hash(tempPassword, 8)
 
   await prisma.user.create({
     data: {

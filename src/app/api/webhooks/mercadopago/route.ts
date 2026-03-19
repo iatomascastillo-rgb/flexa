@@ -59,6 +59,13 @@ function verifyMpSignature(
 
 // ── POST /api/webhooks/mercadopago ────────────────────────────────────────────
 
+// Advertir en startup si la firma HMAC no está configurada.
+// Sin este secret, cualquiera puede enviar eventos de pago falsos.
+// Mitigado parcialmente porque el handler re-verifica con la API de MP.
+if (!process.env.MP_WEBHOOK_SECRET) {
+  console.warn('[webhook/mp] MP_WEBHOOK_SECRET no configurado — verificación de firma deshabilitada')
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   let body: MpWebhookBody
   try {

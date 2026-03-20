@@ -14,24 +14,6 @@ const FEATURES = [
   {
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <rect width="18" height="18" x="3" y="4" rx="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /><path d="m9 16 2 2 4-4" />
-      </svg>
-    ),
-    title: 'Reservas online 24/7',
-    body: 'Tus alumnas reservan y cancelan desde el celular, en cualquier momento. Vos ves todo en tiempo real.',
-  },
-  {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
-      </svg>
-    ),
-    title: 'Créditos automáticos',
-    body: 'El sistema descuenta créditos al reservar y los devuelve al cancelar. El plazo para cancelar y recuperar el crédito es configurable.',
-  },
-  {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect width="20" height="14" x="2" y="5" rx="2" /><path d="M2 10h20" />
       </svg>
     ),
@@ -54,16 +36,7 @@ const FEATURES = [
       </svg>
     ),
     title: 'Días de acceso sin crédito',
-    body: 'Definís cuántos días puede asistir una alumna después de quedarse sin créditos. Al vencerse, el sistema bloquea el acceso automáticamente o te avisa para que lo gestiones vos.',
-  },
-  {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 20V10" /><path d="M12 20V4" /><path d="M6 20v-6" />
-      </svg>
-    ),
-    title: 'Inteligencia artificial para tomar decisiones',
-    body: 'La IA analiza reservas, pagos y asistencia, y te dice qué hacer: a quién contactar, qué clase reforzar, cómo retener alumnas. Sin dashboards, en palabras simples.',
+    body: 'Definís cuántos días puede asistir una alumna después de quedarse sin créditos. El límite es configurable por vos.',
   },
 ]
 
@@ -251,7 +224,7 @@ export default function LandingPage() {
               </span>
             </div>
             <h2
-              className="mb-4 text-4xl font-light text-white md:text-5xl"
+              className="mb-4 text-3xl font-light text-white sm:text-4xl md:text-5xl"
               style={{ fontFamily: 'var(--font-cormorant, serif)' }}
             >
               Tu estudio genera datos.

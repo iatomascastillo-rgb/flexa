@@ -243,7 +243,7 @@ export default function LandingPage() {
                   text="La IA los convierte"
                   as="em"
                   className="not-italic"
-                  textClassName="text-[#9B6DFF]"
+                  textClassName="text-[#9B6DFF] font-bold"
                   duration={0.04}
                   delay={0.02}
                 />
@@ -253,7 +253,7 @@ export default function LandingPage() {
                   text="en decisiones."
                   as="em"
                   className="not-italic"
-                  textClassName="text-[#9B6DFF]"
+                  textClassName="text-[#9B6DFF] font-bold"
                   duration={0.04}
                   delay={0.9}
                 />

@@ -14,6 +14,15 @@ const FEATURES = [
   {
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="18" height="18" x="3" y="4" rx="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /><path d="m9 16 2 2 4-4" />
+      </svg>
+    ),
+    title: 'Reservas online 24/7',
+    body: 'Tus alumnas reservan y cancelan desde el celular, en cualquier momento.',
+  },
+  {
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect width="20" height="14" x="2" y="5" rx="2" /><path d="M2 10h20" />
       </svg>
     ),
@@ -230,12 +239,20 @@ export default function LandingPage() {
               Tu estudio genera datos.
               <br />
               <AnimatedText
-                text="La IA los convierte en decisiones."
+                text="La IA los convierte"
                 as="em"
-                className="not-italic"
+                className="not-italic block"
                 textClassName="text-[#9B6DFF]"
                 duration={0.04}
                 delay={0.02}
+              />
+              <AnimatedText
+                text="en decisiones."
+                as="em"
+                className="not-italic block"
+                textClassName="text-[#9B6DFF]"
+                duration={0.04}
+                delay={0.9}
               />
             </h2>
             <p className="mx-auto max-w-lg text-base text-white/60">

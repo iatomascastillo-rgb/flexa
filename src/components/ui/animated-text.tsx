@@ -26,14 +26,13 @@ export function AnimatedText({
   const letters = text.split('')
 
   return (
-    <Tag ref={ref as never} className={`relative inline-block ${className}`}>
-      {/* Animated letters */}
-      <span className={`relative inline-block ${textClassName}`} aria-label={text}>
+    // inline (not inline-block) so text wraps naturally at word boundaries
+    <Tag ref={ref as never} className={`inline ${className}`}>
+      <span className={`inline ${textClassName}`} aria-label={text}>
         {letters.map((char, i) => (
           <motion.span
             key={i}
             className="inline-block"
-            style={{ whiteSpace: char === ' ' ? 'pre' : 'normal' }}
             initial={{ opacity: 0, y: 8 }}
             animate={isInView ? { opacity: 1, y: 0 } : {}}
             transition={{
@@ -43,11 +42,10 @@ export function AnimatedText({
             }}
             aria-hidden="true"
           >
-            {char}
+            {char === ' ' ? '\u00A0' : char}
           </motion.span>
         ))}
       </span>
-
     </Tag>
   )
 }

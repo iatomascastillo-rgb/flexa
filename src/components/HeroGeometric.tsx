@@ -137,30 +137,20 @@ export function HeroGeometric() {
 
       {/* ── Content ── */}
       <div className="relative z-10">
-        {/* Logo */}
+        {/* Logo — más pequeño en mobile */}
         <motion.div
-          className="mb-6 flex justify-center"
+          className="mb-4 flex justify-center"
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: 'easeOut' }}
         >
-          <AnimatedLogo height={110} withText pulse />
+          <span className="md:hidden"><AnimatedLogo height={72} withText pulse /></span>
+          <span className="hidden md:inline-flex"><AnimatedLogo height={110} withText pulse /></span>
         </motion.div>
-
-        {/* Badge */}
-        <motion.p
-          className="mb-4 inline-block rounded-full px-4 py-1.5 text-xs font-medium uppercase tracking-widest"
-          style={{ background: '#EDF4ED', color: 'var(--sage)' }}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.15, ease: 'easeOut' }}
-        >
-          14 días gratis · Sin tarjeta de crédito
-        </motion.p>
 
         {/* Headline */}
         <motion.h1
-          className="mb-6 text-4xl font-light leading-[1.2] sm:text-5xl md:text-6xl lg:text-7xl"
+          className="mb-6 text-5xl font-light leading-[1.2] sm:text-6xl md:text-6xl lg:text-7xl"
           style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}

@@ -150,7 +150,7 @@ export function HeroGeometric() {
 
         {/* Headline */}
         <motion.h1
-          className="mb-6 text-5xl font-light leading-[1.2] sm:text-6xl md:text-6xl lg:text-7xl"
+          className="mb-6 text-[2.4rem] font-light leading-[1.2] sm:text-5xl md:text-6xl lg:text-7xl"
           style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}

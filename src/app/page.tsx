@@ -181,8 +181,8 @@ export default function LandingPage() {
             Cómo funciona
           </p>
           <h2
-            className="mb-4 text-center text-4xl font-light md:text-5xl"
-            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
+            className="mb-4 text-center text-3xl font-light md:text-5xl"
+            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)', textWrap: 'balance' } as React.CSSProperties}
           >
             Simple desde el primer día
           </h2>

@@ -54,10 +54,15 @@ export function getMonthlyAdminMetrics(
   studioId: string,
   monthStart: Date,
   prevMonthStart: Date,
+  fourMonthsAgo: Date,
 ) {
   const monthKey = `${monthStart.getUTCFullYear()}-${monthStart.getUTCMonth()}`
   return unstable_cache(
     async () => {
+      const now = new Date()
+      const twentyOneDaysAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000)
+      const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
       const [
         monthlyPackages,
         prevMonthPackages,
@@ -65,6 +70,10 @@ export function getMonthlyAdminMetrics(
         totalActiveStudents,
         activeWithBookingsThisMonth,
         monthCancellations,
+        atRiskStudents,
+        expiringPackages,
+        revenueHistoryPackages,
+        monthAttendances,
       ] = await Promise.all([
         // Paquetes aprobados este mes (ingresos)
         prisma.userPackage.findMany({
@@ -112,7 +121,72 @@ export function getMonthlyAdminMetrics(
         prisma.booking.count({
           where: { studioId, status: 'CANCELLED', cancelledAt: { gte: monthStart } },
         }),
+
+        // Alumnos en riesgo: activos, con historial, sin reserva en 21 días
+        prisma.user.findMany({
+          where: {
+            studioId,
+            role: 'STUDENT',
+            active: true,
+            bookings: {
+              none: { status: 'CONFIRMED', classSession: { date: { gte: twentyOneDaysAgo } } },
+              some: { status: 'CONFIRMED' },
+            },
+          },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+          take: 20,
+        }),
+
+        // Paquetes con créditos que vencen en los próximos 7 días
+        prisma.userPackage.findMany({
+          where: {
+            studioId,
+            paymentStatus: 'APPROVED',
+            classesRemaining: { gt: 0 },
+            expiresAt: { gte: now, lte: sevenDaysFromNow },
+          },
+          select: {
+            expiresAt: true,
+            classesRemaining: true,
+            user: { select: { id: true, name: true } },
+          },
+          orderBy: { expiresAt: 'asc' },
+        }),
+
+        // Ingresos de los últimos 3 meses (para tendencia de 4 meses total con el actual)
+        prisma.userPackage.findMany({
+          where: {
+            studioId,
+            paymentStatus: 'APPROVED',
+            activatedAt: { gte: fourMonthsAgo, lt: monthStart },
+            packageId: { not: null },
+          },
+          select: { package: { select: { price: true } }, activatedAt: true },
+        }),
+
+        // Asistencias del mes (para top alumnos)
+        prisma.booking.findMany({
+          where: {
+            studioId,
+            attendanceStatus: 'ATTENDED',
+            classSession: { date: { gte: monthStart } },
+          },
+          select: { userId: true, user: { select: { name: true } } },
+        }),
       ])
+
+      // Top 5 alumnos por asistencias este mes
+      const userCounts = new Map<string, { name: string; count: number }>()
+      for (const b of monthAttendances) {
+        const entry = userCounts.get(b.userId)
+        if (entry) entry.count++
+        else userCounts.set(b.userId, { name: b.user.name ?? '?', count: 1 })
+      }
+      const topStudentsThisMonth = [...userCounts.entries()]
+        .map(([userId, data]) => ({ userId, ...data }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
 
       return {
         monthlyPackages,
@@ -121,6 +195,10 @@ export function getMonthlyAdminMetrics(
         totalActiveStudents,
         activeWithBookingsThisMonth,
         monthCancellations,
+        atRiskStudents,
+        expiringPackages,
+        revenueHistoryPackages,
+        topStudentsThisMonth,
       }
     },
     [`admin-metrics-${studioId}-${monthKey}`],

@@ -36,11 +36,12 @@ export default async function AdminDashboardPage({
   const now = new Date()
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+  const fourMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1))
 
   // ── Queries dinámicas (tiempo real) + métricas mensuales (cache 1h) ──────
   const [
     [todaySessions, pendingPaymentPackages, studentsWithoutPackageCount, monthSessions, monthNoShows],
-    { monthlyPackages, prevMonthPackages, newStudentsCount, totalActiveStudents, activeWithBookingsThisMonth, monthCancellations },
+    { monthlyPackages, prevMonthPackages, newStudentsCount, totalActiveStudents, activeWithBookingsThisMonth, monthCancellations, atRiskStudents, expiringPackages, revenueHistoryPackages, topStudentsThisMonth },
   ] = await Promise.all([
     Promise.all([
       // Sesiones de hoy con asistencia
@@ -112,7 +113,7 @@ export default async function AdminDashboardPage({
     ]),
 
     // Métricas mensuales cacheadas 1 hora
-    getMonthlyAdminMetrics(studioId, monthStart, prevMonthStart),
+    getMonthlyAdminMetrics(studioId, monthStart, prevMonthStart, fourMonthsAgo),
   ])
 
   // ── Cómputos del día ──────────────────────────────────────────────────────
@@ -187,6 +188,24 @@ export default async function AdminDashboardPage({
   const popularTimes = [...dtMap.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
+
+  // ── Tendencia de ingresos (últimos 4 meses) ───────────────────────────────
+  const revenueByMonth: { label: string; amount: number }[] = []
+  for (let i = 3; i >= 1; i--) {
+    const mStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
+    const mEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1))
+    const label = mStart.toLocaleDateString('es-AR', { month: 'short', timeZone: 'UTC' })
+    const amount =
+      revenueHistoryPackages
+        .filter((p) => p.activatedAt != null && p.activatedAt >= mStart && p.activatedAt < mEnd)
+        .reduce((sum, p) => sum + (p.package?.price ?? 0), 0) / 100
+    revenueByMonth.push({ label, amount })
+  }
+  revenueByMonth.push({
+    label: monthStart.toLocaleDateString('es-AR', { month: 'short', timeZone: 'UTC' }),
+    amount: ingresosDelMes,
+  })
+  const maxRevenue = Math.max(...revenueByMonth.map((m) => m.amount), 1)
 
   const nowLabel = new Date().toLocaleDateString('es-AR', {
     weekday: 'long',
@@ -497,6 +516,90 @@ export default async function AdminDashboardPage({
             )}
           </section>
 
+          {/* ── Paquetes próximos a vencer ── */}
+          {expiringPackages.length > 0 && (
+            <section className="mb-5">
+              <p className="mb-3 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+                Paquetes vencen en 7 días
+              </p>
+              <div
+                className="rounded-2xl divide-y overflow-hidden"
+                style={{ background: 'white', border: '1px solid #E8E0D6' }}
+              >
+                {expiringPackages.map((pkg, i) => {
+                  const daysLeft = Math.ceil(
+                    (new Date(pkg.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                  )
+                  return (
+                    <Link
+                      key={`${pkg.user.id}-${i}`}
+                      href={`/${studio}/admin/students/${pkg.user.id}`}
+                      className="flex items-center justify-between px-4 py-3 hover:opacity-75 transition-opacity"
+                    >
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{pkg.user.name}</p>
+                        <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                          {pkg.classesRemaining} crédito{pkg.classesRemaining !== 1 ? 's' : ''} restante{pkg.classesRemaining !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <span
+                        className="rounded-full px-2.5 py-1 text-xs font-medium"
+                        style={{
+                          background: daysLeft <= 2 ? '#FEE2E2' : '#FEF3C7',
+                          color: daysLeft <= 2 ? '#DC2626' : '#D97706',
+                        }}
+                      >
+                        {daysLeft === 0 ? 'hoy' : daysLeft === 1 ? 'mañana' : `${daysLeft}d`}
+                      </span>
+                    </Link>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* ── Alumnos en riesgo de abandono ── */}
+          {atRiskStudents.length > 0 && (
+            <section className="mb-5">
+              <p className="mb-3 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+                Sin clase hace +21 días
+              </p>
+              <div
+                className="rounded-2xl px-5 py-4"
+                style={{ background: 'white', border: '1px solid #E8E0D6' }}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <p
+                    className="text-3xl font-light"
+                    style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--terracotta)' }}
+                  >
+                    {atRiskStudents.length}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                    alumna{atRiskStudents.length !== 1 ? 's' : ''} en riesgo de abandono
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {atRiskStudents.slice(0, 8).map((s) => (
+                    <Link
+                      key={s.id}
+                      href={`/${studio}/admin/students/${s.id}`}
+                      className="rounded-full px-3 py-1 text-xs transition-opacity hover:opacity-75"
+                      style={{ background: '#FEF3C7', color: '#92400E' }}
+                    >
+                      {s.name}
+                    </Link>
+                  ))}
+                  {atRiskStudents.length > 8 && (
+                    <span className="rounded-full px-3 py-1 text-xs" style={{ background: '#F3F4F6', color: 'var(--stone)' }}>
+                      +{atRiskStudents.length - 8} más
+                    </span>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* ── Accesos rápidos ── */}
           <section>
             <p className="mb-2 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
@@ -684,7 +787,7 @@ export default async function AdminDashboardPage({
               </p>
               <div
                 className="rounded-2xl px-5 divide-y"
-                style={{ background: 'white', border: '1px solid #E8E0D6', divideColor: '#E8E0D6' }}
+                style={{ background: 'white', border: '1px solid #E8E0D6' }}
               >
                 {popularTimes.map(([slot, count], i) => (
                   <div
@@ -705,6 +808,71 @@ export default async function AdminDashboardPage({
                       {count} reserva{count !== 1 ? 's' : ''}
                     </span>
                   </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ── Tendencia de ingresos ── */}
+          {revenueByMonth.some((m) => m.amount > 0) && (
+            <section className="mb-5">
+              <p className="mb-3 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+                Tendencia de ingresos
+              </p>
+              <div
+                className="rounded-2xl px-5 py-4"
+                style={{ background: 'white', border: '1px solid #E8E0D6' }}
+              >
+                <div className="flex items-end gap-3 h-20">
+                  {revenueByMonth.map((m, i) => {
+                    const isCurrentMonth = i === revenueByMonth.length - 1
+                    const heightPct = maxRevenue > 0 ? Math.max((m.amount / maxRevenue) * 100, 4) : 4
+                    return (
+                      <div key={m.label} className="flex flex-1 flex-col items-center gap-1.5">
+                        <p className="text-xs font-medium" style={{ color: isCurrentMonth ? 'var(--sage)' : 'var(--stone)' }}>
+                          {m.amount > 0 ? `$${Math.round(m.amount / 1000)}k` : '—'}
+                        </p>
+                        <div className="w-full rounded-t-lg" style={{
+                          height: `${heightPct}%`,
+                          background: isCurrentMonth ? 'var(--sage)' : '#E8E0D6',
+                          minHeight: '4px',
+                        }} />
+                        <p className="text-xs capitalize" style={{ color: 'var(--stone)' }}>{m.label}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ── Top alumnos del mes ── */}
+          {topStudentsThisMonth.length > 0 && (
+            <section className="mb-5">
+              <p className="mb-3 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+                Top alumnos del mes
+              </p>
+              <div
+                className="rounded-2xl divide-y overflow-hidden"
+                style={{ background: 'white', border: '1px solid #E8E0D6' }}
+              >
+                {topStudentsThisMonth.map((s, i) => (
+                  <Link
+                    key={s.userId}
+                    href={`/${studio}/admin/students/${s.userId}`}
+                    className="flex items-center gap-3 px-4 py-3 transition-opacity hover:opacity-75"
+                  >
+                    <span
+                      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-medium"
+                      style={{ background: i === 0 ? '#EDF4ED' : '#F3F4F6', color: i === 0 ? 'var(--sage)' : 'var(--stone)' }}
+                    >
+                      {i + 1}
+                    </span>
+                    <p className="flex-1 text-sm font-medium" style={{ color: 'var(--ink)' }}>{s.name}</p>
+                    <span className="text-xs" style={{ color: 'var(--stone)' }}>
+                      {s.count} clase{s.count !== 1 ? 's' : ''}
+                    </span>
+                  </Link>
                 ))}
               </div>
             </section>

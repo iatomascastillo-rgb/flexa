@@ -238,22 +238,26 @@ export default function LandingPage() {
             >
               Tu estudio genera datos.
               <br />
-              <AnimatedText
-                text="La IA los convierte"
-                as="em"
-                className="not-italic block"
-                textClassName="text-[#9B6DFF]"
-                duration={0.04}
-                delay={0.02}
-              />
-              <AnimatedText
-                text="en decisiones."
-                as="em"
-                className="not-italic block"
-                textClassName="text-[#9B6DFF]"
-                duration={0.04}
-                delay={0.9}
-              />
+              <span className="block">
+                <AnimatedText
+                  text="La IA los convierte"
+                  as="em"
+                  className="not-italic"
+                  textClassName="text-[#9B6DFF]"
+                  duration={0.04}
+                  delay={0.02}
+                />
+              </span>
+              <span className="block">
+                <AnimatedText
+                  text="en decisiones."
+                  as="em"
+                  className="not-italic"
+                  textClassName="text-[#9B6DFF]"
+                  duration={0.04}
+                  delay={0.9}
+                />
+              </span>
             </h2>
             <p className="mx-auto max-w-lg text-base text-white/60">
               Cada mes, la inteligencia artificial de Flexa analiza reservas, pagos y asistencia,

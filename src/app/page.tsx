@@ -1,15 +1,13 @@
 import Link from 'next/link'
 import { HowItWorks } from '@/components/HowItWorks'
 import { AnimatedLogo } from '@/components/AnimatedLogo'
+import { HeroGeometric } from '@/components/HeroGeometric'
+import { BeamsBackground } from '@/components/ui/beams-background'
+import { AIInsightsCarousel } from '@/components/AIInsightsCarousel'
+import { AnimatedText } from '@/components/ui/animated-text'
 
 // ── Datos ──────────────────────────────────────────────────────────────────────
 
-const STATS = [
-  { value: '+1.200', label: 'Reservas procesadas' },
-  { value: '+40', label: 'Estudios activos' },
-  { value: '0', label: 'Errores de crédito' },
-  { value: 'Todo el día', label: 'Soporte disponible' },
-]
 
 
 const FEATURES = [
@@ -76,14 +74,14 @@ const AI_INSIGHTS = [
     quote: 'La facturación creció un 18% respecto al mes anterior. La clase de Reformer del martes a las 18hs es tu turno estrella con 95% de ocupación. Considerá abrir un segundo turno.',
   },
   {
-    tag: 'Alumnas que se alejan',
-    title: 'Quién está perdiendo el ritmo',
-    quote: '4 alumnas activas no reservaron en las últimas 2 semanas. 2 tienen créditos por vencer esta semana. Un mensaje hoy puede recuperar al menos la mitad.',
-  },
-  {
     tag: 'Tu agenda',
     title: 'Qué ajustar para ganar más',
     quote: 'El turno de miércoles 7:00 tiene un 28% de ocupación promedio. Moverlo a las 8:00 podría elevarla al 60%, basado en el patrón de reservas de los últimos 3 meses.',
+  },
+  {
+    tag: 'Alumnas que se alejan',
+    title: 'Quién está perdiendo el ritmo',
+    quote: '4 alumnas activas no reservaron en las últimas 2 semanas. 2 tienen créditos por vencer esta semana. Un mensaje hoy puede recuperar al menos la mitad.',
   },
 ]
 
@@ -96,14 +94,8 @@ const CUSTOMIZATIONS = [
   { title: 'Recurrencia semanal', body: 'Generás todo el mes siguiente con un clic, respetando feriados.' },
 ]
 
-const COMPARISON_ROWS = [
-  { label: 'Pagos', generic: 'Transferencia manual', intl: 'Sin MercadoPago', flexa: 'MercadoPago directo' },
-  { label: 'Análisis de tu negocio', generic: 'No existe', intl: 'Reportes básicos', flexa: 'IA que interpreta y sugiere' },
-  { label: 'Precio', generic: '—', intl: '$45.000/mes', flexa: 'ARS accesible' },
-  { label: 'Hecho para pilates', generic: 'No', intl: 'No (genérico)', flexa: 'Diseñado para esto' },
-]
 
-const TESTIMONIALS = [
+const TESTIMONIALS_PLACEHOLDER = [
   {
     name: 'Valeria M.',
     studio: 'Studio Reform, Buenos Aires',
@@ -196,159 +188,8 @@ export default function LandingPage() {
       </header>
 
       {/* ── Hero ── */}
-      <section className="mx-auto max-w-5xl px-5 py-20 text-center md:py-28">
-        <div className="mb-6 flex justify-center">
-          <AnimatedLogo height={110} withText pulse />
-        </div>
-        <p
-          className="mb-4 inline-block rounded-full px-4 py-1.5 text-xs font-medium uppercase tracking-widest"
-          style={{ background: '#EDF4ED', color: 'var(--sage)' }}
-        >
-          14 días gratis · Sin tarjeta de crédito
-        </p>
-        <h1
-          className="mb-6 text-5xl font-light leading-tight md:text-7xl"
-          style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
-        >
-          <span style={{ color: '#9B6DFF', fontWeight: 700 }}>Gestión inteligente</span> para
-          <br />
-          <em className="not-italic" style={{ color: 'var(--sage)' }}>tu estudio de Pilates</em>
-        </h1>
-        <p className="mx-auto mb-10 max-w-lg text-lg leading-relaxed" style={{ color: 'var(--stone)' }}>
-          Flexa automatiza reservas, pagos y te ayuda a tomar mejores decisiones con IA, sin complicaciones.
-        </p>
-        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <Link
-            href="/registro"
-            className="rounded-2xl px-8 py-4 text-base font-medium transition-opacity hover:opacity-85"
-            style={{ background: 'var(--sage)', color: 'white' }}
-          >
-            Crear mi estudio gratis →
-          </Link>
-          <a href="#como-funciona" className="rounded-2xl px-8 py-4 text-base font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--stone)' }}>
-            Ver cómo funciona
-          </a>
-        </div>
+      <HeroGeometric />
 
-        {/* Dual mockup: alumna (izq) + admin (der) */}
-        <div className="mx-auto mt-16 flex flex-col items-center gap-6 md:flex-row md:items-end md:justify-center md:gap-6">
-
-          {/* Phone: vista alumno */}
-          <div className="w-52 shrink-0">
-            <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Vista alumno</p>
-            <div
-              className="overflow-hidden rounded-[1.8rem] p-1"
-              style={{ background: '#2C2C2C', boxShadow: '0 16px 48px rgba(0,0,0,0.16)' }}
-            >
-              <div className="overflow-hidden rounded-[1.5rem]" style={{ background: 'var(--cream)' }}>
-                <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ background: 'var(--sage)' }}>
-                  <span className="text-xs text-white/60">9:41</span>
-                  <span className="text-sm font-light text-white" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>Mi Pilates</span>
-                  <span className="text-xs text-white/60">●●</span>
-                </div>
-                <div className="px-3 py-3">
-                  <div className="mb-3 rounded-xl p-3" style={{ background: 'var(--sage)' }}>
-                    <p className="mb-0.5 text-xs font-medium uppercase tracking-widest text-white/60">Créditos</p>
-                    <p className="text-4xl font-light text-white" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>8</p>
-                    <div className="mt-1.5 h-1.5 rounded-full bg-white/20">
-                      <div className="h-full w-2/3 rounded-full bg-white/60" />
-                    </div>
-                  </div>
-                  <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Próximas clases</p>
-                  {[
-                    { name: 'Pilates Mat', date: 'Mañana 10:00' },
-                    { name: 'Reformer', date: 'Jue 18:00' },
-                  ].map((c, i) => (
-                    <div key={i} className="mb-1.5 rounded-xl px-2.5 py-2" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
-                      <p className="text-xs font-medium" style={{ color: 'var(--ink)' }}>{c.name}</p>
-                      <p className="text-xs" style={{ color: 'var(--stone)' }}>{c.date}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Card: vista admin */}
-          <div className="w-72 shrink-0">
-            <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Vista admin</p>
-            <div
-              className="overflow-hidden rounded-2xl"
-              style={{ background: 'white', border: '1px solid #E8E0D6', boxShadow: '0 16px 48px rgba(0,0,0,0.10)' }}
-            >
-              {/* Admin header */}
-              <div className="flex items-center justify-between px-5 py-3.5" style={{ background: 'var(--ink)' }}>
-                <div>
-                  <p className="text-xs text-white/40 uppercase tracking-widest">Panel admin</p>
-                  <p className="text-sm font-light text-white" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>Centro Pilates</p>
-                </div>
-                <div className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium text-white" style={{ background: 'var(--sage)' }}>A</div>
-              </div>
-              {/* Stats row */}
-              <div className="grid grid-cols-3 gap-px" style={{ background: '#E8E0D6' }}>
-                {[
-                  { label: 'Activas', value: '10' },
-                  { label: 'Este mes', value: '$52k' },
-                  { label: 'Ocupación', value: '74%' },
-                ].map((s, i) => (
-                  <div key={i} className="px-3 py-3 text-center" style={{ background: 'var(--cream)' }}>
-                    <p className="text-base font-light" style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}>{s.value}</p>
-                    <p className="text-xs" style={{ color: 'var(--stone)' }}>{s.label}</p>
-                  </div>
-                ))}
-              </div>
-              {/* AI recommendation */}
-              <div className="px-4 py-4">
-                <div className="mb-3 rounded-xl p-3.5" style={{ background: 'rgba(155,109,255,0.08)', border: '1px solid rgba(155,109,255,0.2)' }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <span style={{ color: '#9B6DFF', fontSize: '11px' }}>✦</span>
-                      <p className="text-xs font-medium" style={{ color: '#9B6DFF' }}>IA Flexa · Marzo</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: '#FEF3C7', color: '#92400E' }}>
-                      ⚠ Riesgo de abandono
-                    </span>
-                  </div>
-                  <p className="text-xs leading-relaxed" style={{ color: 'var(--stone)' }}>
-                    4 alumnas llevan más de 2 semanas sin venir. Contactarlas hoy puede recuperar al menos 2.
-                  </p>
-                </div>
-                {/* Student list */}
-                <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Alumnas recientes</p>
-                {[
-                  { name: 'Marta G.', status: 'Activa', color: '#5C7A5E', bg: '#EDF4ED' },
-                  { name: 'Julia R.', status: 'Sin paquete', color: '#C4774A', bg: '#F5E8DE' },
-                  { name: 'Ana P.', status: 'Activa', color: '#5C7A5E', bg: '#EDF4ED' },
-                ].map((s, i) => (
-                  <div key={i} className="flex items-center justify-between py-1.5" style={{ borderBottom: i < 2 ? '1px solid #F0EBE5' : 'none' }}>
-                    <p className="text-xs" style={{ color: 'var(--ink)' }}>{s.name}</p>
-                    <span className="rounded-full px-2 py-0.5 text-xs" style={{ background: s.bg, color: s.color }}>{s.status}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* ── Stats ── */}
-      <section style={{ background: 'var(--ink)' }}>
-        <div className="mx-auto max-w-5xl px-5 py-12">
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
-            {STATS.map((s, i) => (
-              <div key={i} className="text-center">
-                <p className="text-3xl font-light text-white md:text-4xl" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>
-                  {s.value}
-                </p>
-                <p className="mt-1 text-xs text-white/50">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
 
       {/* ── Cómo funciona (interactivo) ── */}
@@ -398,7 +239,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Análisis inteligente (IA) ── */}
-      <section style={{ background: 'var(--ink)' }}>
+      <BeamsBackground intensity="medium">
         <div className="mx-auto max-w-5xl px-5 py-24">
           <div className="mb-16 text-center">
             <div className="mb-4 flex items-center justify-center gap-3">
@@ -415,7 +256,14 @@ export default function LandingPage() {
             >
               Tu estudio genera datos.
               <br />
-              <em className="not-italic" style={{ color: '#9B6DFF' }}>La IA los convierte en decisiones.</em>
+              <AnimatedText
+                text="La IA los convierte en decisiones."
+                as="em"
+                className="not-italic"
+                textClassName="text-[#9B6DFF]"
+                duration={0.04}
+                delay={0.02}
+              />
             </h2>
             <p className="mx-auto max-w-lg text-base text-white/60">
               Cada mes, la inteligencia artificial de Flexa analiza reservas, pagos y asistencia,
@@ -423,38 +271,13 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
-            {AI_INSIGHTS.map((insight, i) => (
-              <div
-                key={i}
-                className="rounded-2xl p-6"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)' }}
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <span
-                    className="inline-block rounded-full px-3 py-1 text-xs font-medium"
-                    style={{ background: 'rgba(155,109,255,0.15)', color: '#9B6DFF' }}
-                  >
-                    {insight.tag}
-                  </span>
-                  <span className="text-xs" style={{ color: 'rgba(155,109,255,0.5)' }}>✦ IA</span>
-                </div>
-                <h3 className="mb-3 text-lg font-medium text-white">{insight.title}</h3>
-                <p
-                  className="text-sm leading-relaxed italic"
-                  style={{ color: 'rgba(255,255,255,0.5)', borderLeft: '2px solid rgba(155,109,255,0.35)', paddingLeft: '12px' }}
-                >
-                  &ldquo;{insight.quote}&rdquo;
-                </p>
-              </div>
-            ))}
-          </div>
+          <AIInsightsCarousel insights={AI_INSIGHTS} />
 
           <p className="mt-10 text-center text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>
             Diagnósticos generados automáticamente con IA cada mes · Disponible en Plan Pro
           </p>
         </div>
-      </section>
+      </BeamsBackground>
 
       {/* ── Personalización ── */}
       <section className="py-20" style={{ background: 'var(--cream)' }}>
@@ -494,85 +317,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Comparación vs competidores ── */}
-      <section className="py-20" style={{ background: 'white' }}>
-        <div className="mx-auto max-w-4xl px-5">
-          <p className="mb-2 text-center text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
-            ¿Por qué Flexa?
-          </p>
-          <h2
-            className="mb-4 text-center text-4xl font-light md:text-5xl"
-            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
-          >
-            Hecho para Argentina,
-            <br />hecho para pilates.
-          </h2>
-          <p className="mx-auto mb-14 max-w-md text-center text-base" style={{ color: 'var(--stone)' }}>
-            Las apps genéricas no están pensadas para estudios de pilates en Argentina. Flexa sí.
-          </p>
-          <div className="overflow-hidden rounded-2xl" style={{ border: '1px solid #E8E0D6' }}>
-            <div className="grid grid-cols-4" style={{ borderBottom: '1px solid #E8E0D6' }}>
-              <div className="px-4 py-4" style={{ background: 'var(--cream)' }} />
-              <div className="px-4 py-4 text-center" style={{ background: 'var(--cream)', borderLeft: '1px solid #E8E0D6' }}>
-                <p className="text-xs font-medium" style={{ color: 'var(--stone)' }}>Planilla<br />+ WhatsApp</p>
-              </div>
-              <div className="px-4 py-4 text-center" style={{ background: 'var(--cream)', borderLeft: '1px solid #E8E0D6' }}>
-                <p className="text-xs font-medium" style={{ color: 'var(--stone)' }}>Apps</p>
-              </div>
-              <div className="px-4 py-4 text-center" style={{ background: '#EDF4ED', borderLeft: '1px solid #E8E0D6' }}>
-                <p className="text-xs font-medium" style={{ color: 'var(--sage)' }}>Flexa ✓</p>
-              </div>
-            </div>
-            {COMPARISON_ROWS.map((row, i) => (
-              <div key={i} className="grid grid-cols-4" style={{ borderTop: '1px solid #E8E0D6' }}>
-                <div className="px-4 py-3.5" style={{ background: i % 2 === 0 ? 'white' : 'var(--cream)' }}>
-                  <p className="text-xs font-medium" style={{ color: 'var(--ink)' }}>{row.label}</p>
-                </div>
-                <div className="px-4 py-3.5 text-center flex items-center justify-center" style={{ background: i % 2 === 0 ? 'white' : 'var(--cream)', borderLeft: '1px solid #E8E0D6' }}>
-                  <p className="text-xs" style={{ color: 'var(--stone)' }}>{row.generic}</p>
-                </div>
-                <div className="px-4 py-3.5 text-center flex items-center justify-center" style={{ background: i % 2 === 0 ? 'white' : 'var(--cream)', borderLeft: '1px solid #E8E0D6' }}>
-                  <p className="text-xs" style={{ color: 'var(--stone)' }}>{row.intl}</p>
-                </div>
-                <div className="px-4 py-3.5 text-center flex items-center justify-center" style={{ background: i % 2 === 0 ? '#F5FAF5' : '#EDF4ED', borderLeft: '1px solid #E8E0D6' }}>
-                  <p className="text-xs font-medium" style={{ color: 'var(--sage)' }}>{row.flexa}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── Por qué Flexa / Comparación (oculto hasta tener data real) ── */}
 
-      {/* ── Testimoniales ── */}
-      <section className="py-20" style={{ background: 'var(--cream)' }}>
-        <div className="mx-auto max-w-5xl px-5">
-          <p className="mb-2 text-center text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--sage)' }}>
-            Estudios que ya usan Flexa
-          </p>
-          <h2
-            className="mb-14 text-center text-4xl font-light md:text-5xl"
-            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
-          >
-            Resultados reales
-          </h2>
-          <div className="grid gap-6 md:grid-cols-3">
-            {TESTIMONIALS.map((t, i) => (
-              <div key={i} className="rounded-2xl p-7" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
-                <p
-                  className="mb-6 text-sm leading-relaxed italic"
-                  style={{ color: 'var(--stone)', borderLeft: '2px solid var(--sage)', paddingLeft: '14px' }}
-                >
-                  &ldquo;{t.quote}&rdquo;
-                </p>
-                <div>
-                  <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{t.name}</p>
-                  <p className="text-xs" style={{ color: 'var(--stone)' }}>{t.studio}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── Testimoniales (ocultos hasta tener resultados reales) ── */}
 
       {/* ── Precios ── */}
       <section id="precios" className="py-20" style={{ background: 'white' }}>

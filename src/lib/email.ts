@@ -33,6 +33,11 @@ export type EmailTemplate =
   | 'pastdue-warning-1d'
   | 'pastdue-suspendido'
   | 'admin-resumen'
+  // IA
+  | 'churn-alert-admin'
+  // Pro alerts
+  | 'no-show-pro-alert'
+  | 'expired-packages-pro-alert'
   // Test
   | 'test'
 
@@ -359,6 +364,118 @@ function renderTemplate(template: EmailTemplate, data: Record<string, unknown>):
           </p>
         `),
       }
+
+    case 'churn-alert-admin': {
+      const studentsAtRisk = data.studentsAtRisk as number
+      const studentsExpiredPackage = data.studentsExpiredPackage as number
+      const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '')
+      return {
+        subject: `[${data.studioName}] ${studentsAtRisk} alumna${studentsAtRisk !== 1 ? 's' : ''} en riesgo de abandono`,
+        html: layout('Alerta de retención', `
+          <h1 style="margin:0 0 4px;font-size:24px;font-weight:300;color:#2C2C2C;">Alerta de retención</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#9E8E82;">Hola ${data.adminName}, este es tu resumen semanal de retención de <strong>${data.studioName}</strong>.</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+            <tr>
+              <td width="48%" style="background:#FFF8F0;border-radius:12px;padding:16px;vertical-align:top;border:1px solid #F0D5C8;">
+                <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#C4774A;text-transform:uppercase;letter-spacing:0.08em;">En riesgo</p>
+                <p style="margin:0;font-size:36px;font-weight:300;color:#2C2C2C;">${studentsAtRisk}</p>
+                <p style="margin:4px 0 0;font-size:12px;color:#9E8E82;">sin reservas en 14 días</p>
+              </td>
+              <td width="4%"></td>
+              <td width="48%" style="background:#F7F3EE;border-radius:12px;padding:16px;vertical-align:top;">
+                <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;">Paquetes vencidos</p>
+                <p style="margin:0;font-size:36px;font-weight:300;color:#2C2C2C;">${studentsExpiredPackage}</p>
+                <p style="margin:4px 0 0;font-size:12px;color:#9E8E82;">con créditos sin usar</p>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0 0 16px;font-size:14px;color:#6B5B52;line-height:1.6;">
+            Te recomendamos contactar a estas alumnas por WhatsApp antes de que pierdan el hábito.
+            Un mensaje personalizado tiene mucho más impacto que una notificación automática.
+          </p>
+
+          <a href="${appUrl}/${data.studioSlug}/admin" style="display:inline-block;background:#5C7A5E;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:500;">
+            Ver análisis completo →
+          </a>
+
+          <p style="margin:24px 0 0;font-size:12px;color:#C4B8AC;text-align:center;">
+            Este alerta se envía cada lunes cuando hay alumnas en riesgo de abandono.
+          </p>
+        `),
+      }
+    }
+
+    case 'no-show-pro-alert': {
+      const noShowCount = data.noShowCount as number
+      const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '')
+      return {
+        subject: `[${data.studioSlug}] ${data.studentName} acumula ${noShowCount} ausencias este mes`,
+        html: layout('Alerta de ausencias', `
+          <h1 style="margin:0 0 4px;font-size:24px;font-weight:300;color:#2C2C2C;">Alumna en riesgo</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#9E8E82;">Hola ${data.adminName}, una alumna de tu estudio acumula ausencias este mes.</p>
+
+          <div style="background:#FFF8F0;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #F0D5C8;">
+            <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#C4774A;text-transform:uppercase;letter-spacing:0.08em;">Alumna</p>
+            <p style="margin:0 0 12px;font-size:22px;font-weight:400;color:#2C2C2C;">${data.studentName}</p>
+            <p style="margin:0;font-size:14px;color:#6B5B52;">
+              Registró <strong>${noShowCount} ausencias</strong> este mes — reserva pero no asiste.
+            </p>
+          </div>
+
+          <p style="margin:0 0 16px;font-size:14px;color:#6B5B52;line-height:1.6;">
+            Te recomendamos contactarla directamente para entender qué está pasando.
+            Un mensaje a tiempo puede evitar que abandone el estudio.
+          </p>
+
+          <a href="${appUrl}/${data.studioSlug}/admin/students" style="display:inline-block;background:#5C7A5E;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:500;">
+            Ver alumnas →
+          </a>
+
+          <p style="margin:24px 0 0;font-size:12px;color:#C4B8AC;text-align:center;">
+            Esta alerta se envía automáticamente en el 3er no-show del mes (plan Pro).
+          </p>
+        `),
+      }
+    }
+
+    case 'expired-packages-pro-alert': {
+      const students = data.students as Array<{ name: string; credits: number }>
+      const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '')
+      const studentRows = students
+        .map(s => `<tr><td style="padding:6px 0;font-size:14px;color:#2C2C2C;">${s.name}</td><td style="padding:6px 0;font-size:14px;color:#9E8E82;text-align:right;">${s.credits} crédito${s.credits !== 1 ? 's' : ''} sin usar</td></tr>`)
+        .join('')
+      return {
+        subject: `[${data.studioName}] ${students.length} alumna${students.length !== 1 ? 's' : ''} con paquete vencido y créditos sin usar`,
+        html: layout('Paquetes vencidos con créditos', `
+          <h1 style="margin:0 0 4px;font-size:24px;font-weight:300;color:#2C2C2C;">Créditos sin usar</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#9E8E82;">Hola ${data.adminName}, las siguientes alumnas de <strong>${data.studioName}</strong> tienen paquetes vencidos con créditos que no usaron.</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F3EE;border-radius:12px;padding:16px;margin-bottom:20px;">
+            <thead>
+              <tr>
+                <th style="text-align:left;font-size:11px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:8px;">Alumna</th>
+                <th style="text-align:right;font-size:11px;font-weight:600;color:#9E8E82;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:8px;">Créditos</th>
+              </tr>
+            </thead>
+            <tbody>${studentRows}</tbody>
+          </table>
+
+          <p style="margin:0 0 16px;font-size:14px;color:#6B5B52;line-height:1.6;">
+            Podés contactarlas para ofrecerles una extensión o un nuevo paquete antes de que se desconecten del estudio.
+          </p>
+
+          <a href="${appUrl}/${data.studioSlug}/admin/students" style="display:inline-block;background:#5C7A5E;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:500;">
+            Ver alumnas →
+          </a>
+
+          <p style="margin:24px 0 0;font-size:12px;color:#C4B8AC;text-align:center;">
+            Esta alerta se envía cada día cuando vencen paquetes con créditos (plan Pro).
+          </p>
+        `),
+      }
+    }
 
     case 'admin-resumen':
       return {

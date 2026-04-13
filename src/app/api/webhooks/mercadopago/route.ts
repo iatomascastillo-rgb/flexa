@@ -63,10 +63,20 @@ function verifyMpSignature(
 // Sin este secret, cualquiera puede enviar eventos de pago falsos.
 // Mitigado parcialmente porque el handler re-verifica con la API de MP.
 if (!process.env.MP_WEBHOOK_SECRET) {
-  console.warn('[webhook/mp] MP_WEBHOOK_SECRET no configurado — verificación de firma deshabilitada')
+  if (process.env.NODE_ENV === 'production') {
+    // En producción es obligatorio — sin este secret cualquiera puede falsificar pagos.
+    // Configurarlo en Vercel → Settings → Environment Variables → MP_WEBHOOK_SECRET.
+    console.error('[webhook/mp] CRÍTICO: MP_WEBHOOK_SECRET no configurado en producción')
+  } else {
+    console.warn('[webhook/mp] MP_WEBHOOK_SECRET no configurado — verificación de firma deshabilitada (solo dev)')
+  }
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Leer el studio slug de ?studio=slug (seteado por checkout/route.ts)
+  // Permite usar el token del estudio correcto en fetchMpPayment.
+  const studioSlug = req.nextUrl.searchParams.get('studio') ?? null
+
   let body: MpWebhookBody
   try {
     body = (await req.json()) as MpWebhookBody
@@ -108,10 +118,41 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // ── Resolver token del estudio ────────────────────────────────────────────
+  // El token siempre viene del estudio específico vía ?studio=slug.
+  // No hay fallback al token global — evita procesar pagos de un estudio
+  // con credenciales de otro en caso de slug faltante o mal configurado.
+  if (!studioSlug) {
+    console.warn('[webhook/mp] Webhook recibido sin parámetro studio — ignorando')
+    return NextResponse.json({ ok: true })
+  }
+
+  let accessToken: string | null = null
+  try {
+    const studioData = await prisma.studio.findUnique({
+      where:  { slug: studioSlug },
+      select: { settings: { select: { mpAccessToken: true } } },
+    })
+    accessToken = studioData?.settings?.mpAccessToken ?? null
+  } catch (err) {
+    console.warn('[webhook/mp] Error al resolver token del estudio:', studioSlug, err)
+  }
+
+  // Fallback al token global solo si el estudio no tiene token propio configurado
+  // (estudios en período de transición que aún no conectaron su cuenta MP)
+  if (!accessToken) {
+    accessToken = process.env.MP_ACCESS_TOKEN ?? null
+  }
+
+  if (!accessToken) {
+    console.error('[webhook/mp] Sin access token para estudio:', studioSlug)
+    return NextResponse.json({ ok: true })
+  }
+
   // ── 1. Verificar pago en la API de MercadoPago ────────────────────────────
   let mpPayment: MpPayment
   try {
-    mpPayment = await fetchMpPayment(mpPaymentIdStr)
+    mpPayment = await fetchMpPayment(mpPaymentIdStr, accessToken)
   } catch (err) {
     console.error('[webhook/mp] Error fetching payment from MP API:', err)
     // Devolver 200 para que MP no reintente indefinidamente
@@ -388,17 +429,11 @@ async function activatePackage({
 
 /**
  * Obtiene el detalle de un pago desde la API de MercadoPago.
- *
- * TODO (Fase 2): usar el access token del estudio correspondiente en lugar del global.
- * Requiere agregar mpAccessToken a StudioSettings o a una tabla de credenciales.
+ * Usa el token del estudio si está disponible, de lo contrario el token global.
  */
-async function fetchMpPayment(paymentId: string): Promise<MpPayment> {
-  const accessToken = process.env.MP_ACCESS_TOKEN
-  if (!accessToken) throw new Error('MP_ACCESS_TOKEN not configured')
-
+async function fetchMpPayment(paymentId: string, accessToken: string): Promise<MpPayment> {
   const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
-    // next: { revalidate: 0 } — no cachear respuestas de MP
     cache: 'no-store',
   })
 

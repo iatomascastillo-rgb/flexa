@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireInstructorAPI } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
 import { todayARStart } from '@/lib/formatters'
+import { sendEmail } from '@/lib/email'
 
 export async function POST(
   req: NextRequest,
@@ -113,6 +114,51 @@ export async function POST(
       }
     }
   })
+
+  // ── Alerta Pro: 3er no-show del mes ─────────────────────────────────────────
+  if (status === 'NO_SHOW') {
+    try {
+      const now = new Date()
+      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+      const [noShowCount, sub] = await Promise.all([
+        prisma.booking.count({
+          where: {
+            studioId,
+            userId: booking.userId,
+            attendanceStatus: 'NO_SHOW',
+            classSession: { date: { gte: monthStart } },
+          },
+        }),
+        prisma.subscription.findUnique({
+          where: { studioId },
+          select: { plan: true },
+        }),
+      ])
+
+      if (noShowCount === 3 && sub?.plan === 'PRO') {
+        const [admin, student] = await Promise.all([
+          prisma.user.findFirst({
+            where: { studioId, role: 'STUDIO_ADMIN' },
+            select: { email: true, name: true },
+          }),
+          prisma.user.findUnique({
+            where: { id: booking.userId },
+            select: { name: true },
+          }),
+        ])
+        if (admin) {
+          await sendEmail(admin.email, 'no-show-pro-alert', {
+            adminName: admin.name ?? 'Admin',
+            studentName: student?.name ?? 'Una alumna',
+            studioSlug: studio,
+            noShowCount: 3,
+          })
+        }
+      }
+    } catch (err) {
+      console.error('[attendance] Error en alerta no-show Pro:', err)
+    }
+  }
 
   return NextResponse.json({ ok: true })
 }

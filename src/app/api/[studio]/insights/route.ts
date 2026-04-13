@@ -123,6 +123,28 @@ export async function POST(
     return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
   }
 
+  // ── Límite diario de llamadas frescas a la IA ───────────────────────────────
+  // Máx. 20 generaciones frescas por estudio por día (AR). Las respuestas cacheadas
+  // no cuentan — este límite solo aplica a llamadas reales a Claude.
+  if (!isSuperAdmin) {
+    const startOfTodayAR = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }).split(',')[0]
+      + 'T00:00:00-03:00'
+    )
+    const todayCallCount = await prisma.aiInsight.count({
+      where: {
+        studioId: tenant.studioId,
+        createdAt: { gte: startOfTodayAR },
+      },
+    })
+    if (todayCallCount >= 20) {
+      return NextResponse.json(
+        { error: 'Límite diario de análisis alcanzado. Los análisis se regeneran automáticamente cada 6 horas.' },
+        { status: 429 },
+      )
+    }
+  }
+
   // ── Generar o devolver análisis cacheado ────────────────────────────────────
   try {
     const result = await getOrGenerateInsight({

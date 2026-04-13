@@ -4,8 +4,11 @@ import { prisma } from '@/lib/prisma'
 // ── Constantes ────────────────────────────────────────────────────────────────
 
 const INSIGHT_TTL_MS = 6 * 60 * 60 * 1000 // 6 horas
-const MAX_TOKENS = 800
-const MODEL = 'claude-haiku-4-5-20251001' as const
+const MAX_TOKENS = 600  // los prompts piden máx ~270 palabras ≈ 360 tokens; 600 es margen suficiente
+const MAX_TOKENS_PRO = 900  // Sonnet puede dar respuestas más ricas en Pro
+const MODEL_BASICO = 'claude-haiku-4-5-20251001' as const  // BASICO: rápido y económico
+const MODEL_PRO    = 'claude-sonnet-4-6' as const          // PRO: análisis más rico, caching activo desde 1024t
+const HISTORY_DEPTH = 2  // períodos anteriores a inyectar en el prompt (balance costo/valor)
 
 const DAYS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
@@ -43,6 +46,7 @@ interface ChurnRiskData {
   studentsAtRisk: number
   studentsExpiredPackage: number
   mostAffectedClassTypes: Array<{ name: string; dropCount: number }>
+  chronicNoShows: Array<{ name: string; noShowCount: number }>
 }
 
 interface ScheduleOptimizationData {
@@ -58,6 +62,35 @@ interface ScheduleOptimizationData {
     avgOccupancyPct: number
     totalBookings: number
   }>
+}
+
+// ── Tipos internos de historial ───────────────────────────────────────────────
+
+interface PastInsight { inputData: Record<string, unknown>; createdAt: Date }
+
+// ── Guard de datos mínimos ─────────────────────────────────────────────────────
+
+interface ValidationResult { ok: boolean; message: string }
+
+function validateMinimumData(type: InsightType, inputData: Record<string, unknown>): ValidationResult {
+  if (type === 'monthly_summary') {
+    const d = inputData as unknown as MonthlySummaryData
+    if (d.totalActiveStudents < 5)
+      return { ok: false, message: 'Necesitás al menos 5 alumnas activas para generar este análisis.' }
+    if (d.totalSessions < 3)
+      return { ok: false, message: 'Necesitás al menos 3 clases dictadas este mes para generar este análisis.' }
+  }
+  if (type === 'churn_risk') {
+    const d = inputData as unknown as ChurnRiskData
+    if (d.totalActiveStudents < 5)
+      return { ok: false, message: 'Necesitás al menos 5 alumnas activas para detectar patrones de abandono.' }
+  }
+  if (type === 'schedule_optimization') {
+    const d = inputData as unknown as ScheduleOptimizationData
+    if (d.totalSessions < 5)
+      return { ok: false, message: 'Necesitás al menos 5 clases en el mes para optimizar la agenda.' }
+  }
+  return { ok: true, message: '' }
 }
 
 // ── Función principal exportada ───────────────────────────────────────────────
@@ -113,8 +146,43 @@ export async function getOrGenerateInsight(params: {
     userPrompt = buildScheduleOptimizationPrompt(data)
   }
 
-  // ── 4. Llamar a Claude ──────────────────────────────────────────────────────
-  const content = await callClaude(systemPrompt, userPrompt)
+  // ── 3.5. Validar datos mínimos ──────────────────────────────────────────────
+  const validation = validateMinimumData(type, inputData)
+  if (!validation.ok) {
+    throw new Error(validation.message)
+  }
+
+  // ── 3.7. Cargar historial de análisis anteriores ────────────────────────────
+  const pastInsightsRaw = await prisma.aiInsight.findMany({
+    where: { studioId, type },
+    orderBy: { createdAt: 'desc' },
+    take: HISTORY_DEPTH,
+    select: { inputData: true, createdAt: true },
+  })
+  const pastInsights: PastInsight[] = pastInsightsRaw
+    .filter((h) => h.inputData !== null)
+    .map((h) => ({ inputData: h.inputData as Record<string, unknown>, createdAt: h.createdAt }))
+
+  // Reconstruir prompt con historial
+  if (type === 'monthly_summary') {
+    userPrompt = buildMonthlySummaryPrompt(inputData as unknown as MonthlySummaryData, pastInsights)
+  } else if (type === 'churn_risk') {
+    userPrompt = buildChurnRiskPrompt(inputData as unknown as ChurnRiskData, pastInsights)
+  } else {
+    userPrompt = buildScheduleOptimizationPrompt(inputData as unknown as ScheduleOptimizationData, pastInsights)
+  }
+
+  // ── 4. Seleccionar modelo según plan del estudio ────────────────────────────
+  const sub = await prisma.subscription.findUnique({
+    where: { studioId },
+    select: { plan: true },
+  })
+  const isPro = sub?.plan === 'PRO'
+  const model = isPro ? MODEL_PRO : MODEL_BASICO
+  const maxTokens = isPro ? MAX_TOKENS_PRO : MAX_TOKENS
+
+  // ── 4.1. Llamar a Claude ────────────────────────────────────────────────────
+  const content = await callClaude(systemPrompt, userPrompt, model, maxTokens)
 
   if (content.length > 4000) {
     throw new Error('Error al procesar el análisis. Intentá de nuevo.')
@@ -282,8 +350,9 @@ async function aggregateChurnRisk(studioId: string): Promise<ChurnRiskData> {
   const now = new Date()
   const cutoff45d = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000)
   const cutoff14d = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+  const monthStart = arMonthStart()
 
-  const [totalActiveStudents, studentsActive45d, studentsActive14d, expiredPackages] = await Promise.all([
+  const [totalActiveStudents, studentsActive45d, studentsActive14d, expiredPackages, noShowStudents] = await Promise.all([
     prisma.user.count({ where: { studioId, role: 'STUDENT', active: true } }),
     // Tuvieron al menos 1 reserva en los últimos 45 días
     prisma.user.count({
@@ -306,6 +375,20 @@ async function aggregateChurnRisk(studioId: string): Promise<ChurnRiskData> {
         paymentStatus: 'APPROVED',
         expiresAt: { lt: now },
         classesRemaining: { gt: 0 },
+      },
+    }),
+    // Alumnos con ausencias este mes (para detectar crónicas ≥3)
+    prisma.user.findMany({
+      where: {
+        studioId, role: 'STUDENT', active: true,
+        bookings: { some: { attendanceStatus: 'NO_SHOW', classSession: { date: { gte: monthStart } } } },
+      },
+      select: {
+        name: true,
+        bookings: {
+          where: { attendanceStatus: 'NO_SHOW', classSession: { date: { gte: monthStart } } },
+          select: { id: true },
+        },
       },
     }),
   ])
@@ -345,7 +428,12 @@ async function aggregateChurnRisk(studioId: string): Promise<ChurnRiskData> {
     .sort((a, b) => b.dropCount - a.dropCount)
     .slice(0, 3)
 
-  return { totalActiveStudents, studentsAtRisk, studentsExpiredPackage: expiredPackages, mostAffectedClassTypes }
+  const chronicNoShows = noShowStudents
+    .map(u => ({ name: u.name ?? '?', noShowCount: u.bookings.length }))
+    .filter(u => u.noShowCount >= 3)
+    .sort((a, b) => b.noShowCount - a.noShowCount)
+
+  return { totalActiveStudents, studentsAtRisk, studentsExpiredPackage: expiredPackages, mostAffectedClassTypes, chronicNoShows }
 }
 
 async function aggregateScheduleOptimization(studioId: string): Promise<ScheduleOptimizationData> {
@@ -397,14 +485,24 @@ async function aggregateScheduleOptimization(studioId: string): Promise<Schedule
 
 // ── Claude API call ───────────────────────────────────────────────────────────
 
-async function callClaude(systemPrompt: string, userPrompt: string): Promise<string> {
+async function callClaude(systemPrompt: string, userPrompt: string, model: string, maxTokens: number): Promise<string> {
   // Instanciar dentro de la función para soportar rotación de API key sin redeploy
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+  // cache_control: "ephemeral" marca el system prompt como cacheable.
+  // Anthropic reutiliza el prefijo si el contenido es idéntico y aún está en caché (TTL ~5 min).
+  // Para Haiku el umbral mínimo es 2048 tokens; para Sonnet es 1024.
+  // Con Sonnet (Pro) el caching se activa con prompts ~1024+ tokens.
   const message = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: MAX_TOKENS,
-    system: systemPrompt,
+    model,
+    max_tokens: maxTokens,
+    system: [
+      {
+        type: 'text',
+        text: systemPrompt,
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
     messages: [{ role: 'user', content: userPrompt }],
   })
 
@@ -464,27 +562,29 @@ Máximo 280 palabras.`
 
 const SYSTEM_CHURN_RISK = `${CONTEXTO_PILATES}
 TU ROL: Identificar alumnos que pierden el ritmo y sugerir contacto humano.
-Un alumno en riesgo es quien no reserva hace 14 días o tiene más de 2 clases "pendientes de recuperación" por vencer.
+Hay dos tipos de riesgo distintos que debés tratar por separado:
+- Tipo A (desenganche): no reservó en los últimos 14 días. Señal de que está perdiendo el hábito o evaluando irse.
+- Tipo B (presencia fantasma): reserva pero no asiste (3 o más ausencias este mes). Ocupa lugares, paga pero no va. Suele preceder al abandono y además perjudica la operación.
 
 Estructura fija de respuesta:
 
 Estado de la retención
 ———
-[Cuántos alumnos están en zona de riesgo. Comparalo con el promedio de bajas del mes pasado para dar contexto de gravedad.]
+[Cuántos alumnos hay de cada tipo de riesgo. Si hay histórico, comparalo para dar contexto de tendencia.]
 
 Patrones detectados
 ———
-[Describí si el riesgo se concentra en un horario específico o en alumnos nuevos vs. antiguos. Mencioná si hay muchos créditos de recuperación acumulados sin uso.]
+[Describí brevemente cada grupo: el que dejó de reservar y el que reserva sin asistir. Mencioná si hay créditos vencidos sin usar.]
 
 Acciones de contacto
 ———
-[3 sugerencias de contacto personal (vía WhatsApp). Priorizá a los que tienen clases por vencer. No sugieras mails automáticos.]
+[2 sugerencias para el Tipo A (desenganche) y 2 para el Tipo B (presencia fantasma). Las acciones deben ser distintas: al Tipo A se lo reactiva con una invitación; al Tipo B se lo acompaña para entender qué le impide asistir. No sugieras mails automáticos, priorizá WhatsApp personal.]
 
 Para prevenir
 ———
-[Una recomendación sobre la política de vencimiento de clases o comunicación para evitar que el alumno pierda el hábito.]
+[Una recomendación de política o comunicación para reducir ambos patrones.]
 
-Máximo 260 palabras.`
+Máximo 280 palabras.`
 
 const SYSTEM_SCHEDULE_OPTIMIZATION = `${CONTEXTO_PILATES}
 TU ROL: Analizar la agenda para mejorar la eficiencia operativa sin juzgar a los profesionales.
@@ -511,12 +611,12 @@ Máximo 280 palabras.`
 
 // ── User prompt builders ──────────────────────────────────────────────────────
 
-function buildMonthlySummaryPrompt(d: MonthlySummaryData): string {
+function buildMonthlySummaryPrompt(d: MonthlySummaryData, history?: PastInsight[]): string {
   const variacion = d.revenueVariationPct !== null
     ? `${d.revenueVariationPct > 0 ? '+' : ''}${d.revenueVariationPct}%`
     : 'sin dato anterior'
 
-  return `Analizá el desempeño de este estudio de pilates durante ${d.monthLabel}.
+  let prompt = `Analizá el desempeño de este estudio de pilates durante ${d.monthLabel}.
 
 INGRESOS
 - Facturación: $${d.revenueARS.toLocaleString('es-AR')} ARS
@@ -537,33 +637,60 @@ ALUMNOS
 - Sin ninguna reserva este mes: ${d.studentsWithoutActivity}
 
 CLASES MÁS RESERVADAS
-${d.topClassTypes.length > 0 ? d.topClassTypes.map(c => `- ${c.name}: ${c.bookingCount} reservas`).join('\n') : '- Sin datos suficientes'}
+${d.topClassTypes.length > 0 ? d.topClassTypes.map(c => `- ${c.name}: ${c.bookingCount} reservas`).join('\n') : '- Sin datos suficientes'}`
+
+  if (history && history.length > 0) {
+    const histSection = history.map((h, i) => {
+      const past = h.inputData as unknown as MonthlySummaryData
+      return `Período ${i + 1} (${past.monthLabel ?? '?'}): facturación $${(past.revenueARS ?? 0).toLocaleString('es-AR')}, ocupación ${past.avgOccupancyPct ?? 0}%, activas ${past.totalActiveStudents ?? 0}, nuevas ${past.newStudentsThisMonth ?? 0}`
+    }).join('\n')
+    prompt += `\n\nHISTORIAL DE PERÍODOS ANTERIORES (del más reciente al más antiguo)\n${histSection}\n\nUsá este historial para identificar tendencias y comparar con períodos anteriores.`
+  }
+
+  prompt += `
 
 Con estos datos:
 1. Identificá los 2 puntos más fuertes del mes.
 2. Señalá los 2 riesgos o áreas de mejora más urgentes.
 3. Dá 2 recomendaciones concretas para el mes siguiente.`
+
+  return prompt
 }
 
-function buildChurnRiskPrompt(d: ChurnRiskData): string {
-  return `Análisis de riesgo de abandono para este estudio de pilates.
+function buildChurnRiskPrompt(d: ChurnRiskData, history?: PastInsight[]): string {
+  let prompt = `Análisis de riesgo de abandono para este estudio de pilates.
 
 ESTADO ACTUAL
 - Alumnos activos totales: ${d.totalActiveStudents}
-- Alumnos en riesgo (sin reservas en últimas 2 semanas, pero activos en el último mes y medio): ${d.studentsAtRisk}
+- Tipo A — Desenganche (sin reservas en últimas 2 semanas, pero activos en el último mes y medio): ${d.studentsAtRisk}
 - Paquetes vencidos con créditos sin usar: ${d.studentsExpiredPackage}
 
+TIPO B — PRESENCIA FANTASMA (reservan pero no asisten, 3+ ausencias este mes)
+${d.chronicNoShows.length > 0 ? d.chronicNoShows.map(u => `- ${u.name}: ${u.noShowCount} ausencias`).join('\n') : '- Ninguna alumna con ausencias recurrentes este mes'}
+
 CLASES CON MAYOR CAÍDA DE ASISTENCIA
-${d.mostAffectedClassTypes.length > 0 ? d.mostAffectedClassTypes.map(c => `- ${c.name}: ${c.dropCount} alumnos inactivos`).join('\n') : '- Sin caídas significativas detectadas'}
+${d.mostAffectedClassTypes.length > 0 ? d.mostAffectedClassTypes.map(c => `- ${c.name}: ${c.dropCount} alumnos inactivos`).join('\n') : '- Sin caídas significativas detectadas'}`
+
+  if (history && history.length > 0) {
+    const histSection = history.map((h, i) => {
+      const past = h.inputData as unknown as ChurnRiskData
+      return `Período ${i + 1}: activos ${past.totalActiveStudents ?? 0}, en riesgo ${past.studentsAtRisk ?? 0}, paquetes vencidos ${past.studentsExpiredPackage ?? 0}`
+    }).join('\n')
+    prompt += `\n\nHISTORIAL DE PERÍODOS ANTERIORES (del más reciente al más antiguo)\n${histSection}\n\nUsá este historial para evaluar si el riesgo de churn mejoró, empeoró o se mantiene estable.`
+  }
+
+  prompt += `
 
 Con estos datos:
 1. Evaluá la gravedad del riesgo de churn actual.
 2. Identificá posibles causas (estacionalidad, precio, horarios, etc.).
 3. Sugerí 3 acciones concretas para reactivar a los alumnos en riesgo.
 4. Recomendá 1 cambio preventivo para evitar este patrón en el futuro.`
+
+  return prompt
 }
 
-function buildScheduleOptimizationPrompt(d: ScheduleOptimizationData): string {
+function buildScheduleOptimizationPrompt(d: ScheduleOptimizationData, history?: PastInsight[]): string {
   const underperforming = d.underperformingSlots.length > 0
     ? d.underperformingSlots.map(s => `- ${s.dayOfWeek} ${s.time}: ${s.avgOccupancyPct}% promedio`).join('\n')
     : '- Ninguno: todos los horarios superan el 40% de ocupación'
@@ -576,7 +703,7 @@ function buildScheduleOptimizationPrompt(d: ScheduleOptimizationData): string {
     .map(s => `- ${s.dayOfWeek} ${s.time}: ${s.avgOccupancyPct}% ocupación (${s.totalBookings} reservas en ${s.sessionCount} clases)`)
     .join('\n')
 
-  return `Analizá la distribución de clases de este estudio durante ${d.monthLabel}.
+  let prompt = `Analizá la distribución de clases de este estudio durante ${d.monthLabel}.
 
 RESUMEN GENERAL
 - Total de clases dictadas: ${d.totalSessions}
@@ -589,11 +716,23 @@ HORARIOS CON ALTA DEMANDA (más del 80%)
 ${top}
 
 DETALLE POR DÍA Y HORARIO
-${detail || '- Sin datos suficientes'}
+${detail || '- Sin datos suficientes'}`
+
+  if (history && history.length > 0) {
+    const histSection = history.map((h, i) => {
+      const past = h.inputData as unknown as ScheduleOptimizationData
+      return `Período ${i + 1} (${past.monthLabel ?? '?'}): ${past.totalSessions ?? 0} clases, ocupación promedio ${past.avgOccupancyPct ?? 0}%`
+    }).join('\n')
+    prompt += `\n\nHISTORIAL DE PERÍODOS ANTERIORES (del más reciente al más antiguo)\n${histSection}\n\nUsá este historial para identificar si los horarios con baja ocupación son un problema recurrente o puntual.`
+  }
+
+  prompt += `
 
 Con estos datos:
 1. Identificá los 2 horarios que deberían eliminarse o reasignarse.
 2. Identificá los 2 horarios donde agregar una segunda clase sería rentable.
 3. Sugerí el horario ideal para una clase nueva si el estudio quisiera expandirse.
 4. Dá 1 recomendación sobre la distribución semanal.`
+
+  return prompt
 }

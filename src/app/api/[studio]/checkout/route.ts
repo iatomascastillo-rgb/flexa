@@ -142,7 +142,7 @@ export async function POST(
       pending: `${appBaseUrl}/${studio}/paquetes?payment=pending`,
     }
     preferenceBody.auto_return = 'approved'
-    preferenceBody.notification_url = `${appBaseUrl}/api/webhooks/mercadopago`
+    preferenceBody.notification_url = `${appBaseUrl}/api/webhooks/mercadopago?studio=${studio}`
   }
 
   let preference: MpPreferenceResponse

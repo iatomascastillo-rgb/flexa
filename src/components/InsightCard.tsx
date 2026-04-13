@@ -31,11 +31,13 @@ export function InsightCard({ studio, type, title, description }: InsightCardPro
   const [data, setData] = useState<InsightData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [upgradeRequired, setUpgradeRequired] = useState(false)
+  const [insufficientData, setInsufficientData] = useState(false)
 
   async function generate() {
     setLoading(true)
     setError(null)
     setUpgradeRequired(false)
+    setInsufficientData(false)
     try {
       const res = await fetch(`/api/${studio}/insights`, {
         method: 'POST',
@@ -48,7 +50,13 @@ export function InsightCard({ studio, type, title, description }: InsightCardPro
           setUpgradeRequired(true)
           return
         }
-        setError(body.error ?? 'Error al generar el análisis.')
+        const msg = body.error ?? 'Error al generar el análisis.'
+        if (msg.includes('Necesitás al menos')) {
+          setError(msg)
+          setInsufficientData(true)
+          return
+        }
+        setError(msg)
         return
       }
       const result = (await res.json()) as InsightData
@@ -101,6 +109,21 @@ export function InsightCard({ studio, type, title, description }: InsightCardPro
         </div>
       )}
 
+      {/* Estado: datos insuficientes */}
+      {insufficientData && !loading && (
+        <div
+          className="rounded-xl p-4"
+          style={{ background: '#FFF8F0', border: '1px solid #E8E0D6' }}
+        >
+          <p className="text-sm font-medium mb-1" style={{ color: 'var(--ink)' }}>
+            Datos insuficientes
+          </p>
+          <p className="text-xs" style={{ color: 'var(--stone)' }}>
+            {error}
+          </p>
+        </div>
+      )}
+
       {/* Estado: sin datos */}
       {!data && !loading && !error && !upgradeRequired && (
         <button
@@ -125,7 +148,7 @@ export function InsightCard({ studio, type, title, description }: InsightCardPro
       )}
 
       {/* Estado: error */}
-      {error && !loading && (
+      {error && !loading && !insufficientData && (
         <div className="space-y-3">
           <p className="text-xs text-center" style={{ color: 'var(--terracotta)' }}>
             {error}

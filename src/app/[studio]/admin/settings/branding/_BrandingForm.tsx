@@ -191,7 +191,7 @@ export function BrandingForm({ studio, studioName, initial }: Props) {
           <div className="flex items-center gap-3 px-5 py-4" style={{ background: primary }}>
             {logoPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoPreview} alt="Logo" className="h-10 w-10 rounded-full object-cover" style={{ background: 'white' }} />
+              <img src={logoPreview} alt="Logo" className="h-10 max-w-[4rem] object-contain" style={{ background: 'white', borderRadius: 6, padding: 2 }} />
             ) : (
               <div className="flex h-10 w-10 items-center justify-center rounded-full text-base font-medium" style={{ background: 'rgba(255,255,255,0.2)', color: 'white' }}>
                 {studioName.charAt(0).toUpperCase()}
@@ -356,7 +356,7 @@ export function BrandingForm({ studio, studioName, initial }: Props) {
           <div className="flex items-center gap-4">
             {logoPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoPreview} alt="Logo actual" className="h-14 w-14 rounded-full object-cover" style={{ border: '1px solid #E8E0D6' }} />
+              <img src={logoPreview} alt="Logo actual" className="h-14 max-w-[7rem] object-contain" style={{ border: '1px solid #E8E0D6', borderRadius: 10, background: 'white', padding: 3 }} />
             ) : (
               <div className="flex h-14 w-14 items-center justify-center rounded-full text-xl font-medium" style={{ background: '#EDF4ED', color: 'var(--sage)' }}>
                 {studioName.charAt(0).toUpperCase()}

@@ -15,6 +15,14 @@
     {
       "path": "/api/cron/monthly-summary",
       "schedule": "0 13 1 * *"
+    },
+    {
+      "path": "/api/cron/weekly-churn",
+      "schedule": "0 10 * * 1"
+    },
+    {
+      "path": "/api/cron/expired-packages",
+      "schedule": "0 12 * * *"
     }
   ]
 }

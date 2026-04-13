@@ -131,6 +131,7 @@ model Studio {
   saasPayments            SaasPayment[]
   aiInsights              AiInsight[]
   holidays                StudioHoliday[]
+  news                    StudioNews[]
 
   @@map("studios")
 }
@@ -180,8 +181,11 @@ model StudioSettings {
   recoveryEnabled       Boolean                @default(false)
   recoveryDays          Int                    @default(7)
 
-  /// Access token de MercadoPago del estudio (token de producción del admin del estudio)
-  mpAccessToken         String?
+  /// Credenciales OAuth de MercadoPago — se obtienen via el botón "Conectar con MP"
+  /// Nunca se exponen al cliente; solo se muestran enmascaradas en el panel admin.
+  mpAccessToken         String?   // Bearer token para crear preferencias y verificar pagos
+  mpRefreshToken        String?   // Para renovar el access token cuando expire
+  mpTokenExpiresAt      DateTime? // Fecha de vencimiento del access token
 
   /// Si está habilitado, los alumnos nuevos reciben 1 crédito de prueba gratuito al unirse.
   /// Permite al admin filtrar después qué alumnos hicieron solo la prueba y no renovaron.
@@ -262,6 +266,9 @@ model User {
   active           Boolean  @default(true)
   whatsappOptOut   Boolean  @default(false)
 
+  loginAttempts    Int      @default(0)
+  lockedUntil      DateTime?
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -271,6 +278,7 @@ model User {
   recurringSchedules    RecurringSchedule[]
   creditTransactions    CreditTransaction[] @relation("CreatedBy")
   auditLogs             AuditLog[]
+  authoredNews          StudioNews[]        @relation("AuthoredNews")
 
   @@unique([email, studioId])
   @@map("users")
@@ -601,6 +609,30 @@ model StudioHoliday {
   @@unique([studioId, date])
   @@index([studioId, date])
   @@map("studio_holidays")
+}
+
+/// Noticias del estudio visibles para los alumnos.
+/// publishedAt = null → borrador (solo admin). archivedAt != null → soft-delete.
+model StudioNews {
+  id          String    @id @default(cuid())
+  studioId    String
+  studio      Studio    @relation(fields: [studioId], references: [id])
+
+  title       String    @db.VarChar(120)
+  content     String    @db.VarChar(1000)
+  imageUrl    String?
+
+  publishedAt DateTime?  // null = borrador; not null = publicado
+  archivedAt  DateTime?  // soft-delete (nunca .delete())
+
+  createdBy   String
+  author      User       @relation("AuthoredNews", fields: [createdBy], references: [id])
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([studioId, publishedAt])
+  @@map("studio_news")
 }
 
 // -- MIGRATION: ALTER TABLE user_packages ADD CONSTRAINT classes_remaining_non_negative CHECK (classes_remaining >= 0);

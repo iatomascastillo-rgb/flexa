@@ -36,7 +36,7 @@ export default async function InstructorHomePage({
   const { studio } = await params
 
   const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/instructor`)
+  if (!session?.user?.id) redirect(`/${studio}/login?callbackUrl=/${studio}/instructor`)
   if (session.user.role === 'STUDENT') redirect(`/${studio}`)
 
   const tenant = await getTenantBySlug(studio)
@@ -158,7 +158,7 @@ export default async function InstructorHomePage({
       {/* Studio header */}
       <div className="flex items-center gap-3 pt-6 pb-4">
         {logoUrl ? (
-          <img src={logoUrl} alt={studioName} className="h-9 w-9 rounded-full object-cover" style={{ border: '1px solid #E8E0D6' }} />
+          <img src={logoUrl} alt={studioName} className="h-9 max-w-[3.5rem] object-contain" style={{ border: '1px solid #E8E0D6', borderRadius: 8, background: 'white', padding: 2 }} />
         ) : (
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white" style={{ background: 'var(--sage)' }}>
             {studioName.charAt(0).toUpperCase()}

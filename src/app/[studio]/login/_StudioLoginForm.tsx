@@ -7,44 +7,31 @@ import { useSearchParams } from 'next/navigation'
 const safeSlug  = (s: string) => s.replace(/[^a-z0-9-]/g, '').slice(0, 40)
 const safeEmail = (s: string) => s.slice(0, 254)
 
-// ── Formulario ────────────────────────────────────────────────────────────────
+interface Props {
+  studio:     string
+  studioName: string
+  logoUrl:    string | null
+}
 
-function LoginForm() {
+function Form({ studio, studioName, logoUrl }: Props) {
   const searchParams = useSearchParams()
 
-  // callbackUrl viene de NextAuth: "?callbackUrl=/centro-pilates"
-  // Validar que sea una ruta relativa para evitar open redirect
   const rawCallback = searchParams.get('callbackUrl') ?? '/'
   const callbackUrl =
     rawCallback.startsWith('/') && !rawCallback.startsWith('//')
       ? rawCallback
       : '/'
 
-  // Extraer slug solo si el primer segmento es un studio real, no una ruta reservada
-  const RESERVED = new Set(['superadmin', 'api', 'auth', 'login', 'registro', 'auth-test'])
-  const firstSegment = callbackUrl.replace(/^\//, '').split('/')[0] ?? ''
-  // ?studio=xxx permite pre-llenar el campo cuando callbackUrl es una ruta reservada (ej: /superadmin)
-  const studioParam = searchParams.get('studio') ?? ''
-  const studioSlug = RESERVED.has(firstSegment) ? studioParam : firstSegment
-
-  const [email, setEmail] = useState('')
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [slug, setSlug] = useState(studioSlug)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [error, setError]       = useState('')
+  const [loading, setLoading]   = useState(false)
 
   useEffect(() => {
     try {
-      const lastStudio = safeSlug(localStorage.getItem('flexa_last_studio') ?? '')
-      const lastEmail  = safeEmail(localStorage.getItem('flexa_email') ?? '')
-      if (!slug && lastStudio) setSlug(lastStudio)
-      if (!email && lastEmail) setEmail(lastEmail)
-      // Auto-redirect: si tenemos estudio guardado y no hay contexto en la URL, ir directo a su login
-      if (lastStudio && !studioSlug && !rawCallback.includes('/superadmin')) {
-        window.location.replace(`/${lastStudio}/login`)
-      }
+      const saved = safeEmail(localStorage.getItem('flexa_email') ?? '')
+      if (saved) setEmail(saved)
     } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -55,20 +42,19 @@ function LoginForm() {
     const result = await signIn('credentials', {
       email: email.trim().toLowerCase(),
       password,
-      studioSlug: slug.trim().toLowerCase(),
+      studioSlug: studio,
       redirect: false,
     })
 
     if (result?.error) {
-      setError('Email, contraseña o estudio incorrectos.')
+      setError('Email o contraseña incorrectos.')
       setLoading(false)
     } else {
       try {
         localStorage.setItem('flexa_email', email.trim().toLowerCase())
-        localStorage.setItem('flexa_last_studio', safeSlug(slug.trim().toLowerCase()))
+        localStorage.setItem('flexa_last_studio', safeSlug(studio))
       } catch {}
-      // Full page navigation so Vercel's serverless functions receive the new session cookie
-      window.location.href = callbackUrl !== '/' ? callbackUrl : `/${slug}`
+      window.location.href = callbackUrl !== '/' ? callbackUrl : `/${studio}`
     }
   }
 
@@ -78,15 +64,30 @@ function LoginForm() {
       style={{ background: 'var(--cream)' }}
     >
       <div className="w-full max-w-sm">
-        {/* Logo / título */}
+        {/* Logo / nombre del estudio */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <img src="/flexa-logo.svg" alt="Flexa" className="h-16 w-16" />
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt={studioName}
+              className="max-h-20 max-w-[10rem] object-contain"
+              style={{ borderRadius: 12, background: 'white', padding: 4, border: '1px solid #E8E0D6' }}
+            />
+          ) : (
+            <div
+              className="flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-medium"
+              style={{ background: 'var(--sage)', color: 'white' }}
+            >
+              {studioName.charAt(0).toUpperCase()}
+            </div>
+          )}
           <div className="text-center">
             <h1
               className="text-3xl font-light"
               style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
             >
-              Flexa
+              {studioName}
             </h1>
             <p className="mt-0.5 text-sm" style={{ color: 'var(--stone)' }}>
               Ingresá a tu estudio
@@ -99,28 +100,6 @@ function LoginForm() {
           className="space-y-4 rounded-2xl p-6"
           style={{ background: 'white', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}
         >
-          {/* Studio slug */}
-          <div>
-            <label
-              htmlFor="slug"
-              className="mb-1 block text-xs font-medium"
-              style={{ color: 'var(--stone)' }}
-            >
-              Estudio
-            </label>
-            <input
-              id="slug"
-              type="text"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              required
-              placeholder="centro-pilates"
-              autoCapitalize="none"
-              className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sage)]"
-              style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
-            />
-          </div>
-
           {/* Email */}
           <div>
             <label
@@ -185,26 +164,21 @@ function LoginForm() {
           </button>
         </form>
 
-        {slug && (
-          <p className="mt-5 text-center text-sm" style={{ color: 'var(--stone)' }}>
-            ¿Sos nueva?{' '}
-            <a href={`/${slug}/unirse`} className="font-medium" style={{ color: 'var(--sage)' }}>
-              Registrate acá
-            </a>
-          </p>
-        )}
+        <p className="mt-5 text-center text-sm" style={{ color: 'var(--stone)' }}>
+          ¿Sos nueva?{' '}
+          <a href={`/${studio}/unirse`} className="font-medium" style={{ color: 'var(--sage)' }}>
+            Registrate acá
+          </a>
+        </p>
       </div>
     </div>
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-// Suspense requerido por useSearchParams() en Next.js App Router
-
-export default function LoginPage() {
+export default function StudioLoginForm(props: Props) {
   return (
     <Suspense>
-      <LoginForm />
+      <Form {...props} />
     </Suspense>
   )
 }

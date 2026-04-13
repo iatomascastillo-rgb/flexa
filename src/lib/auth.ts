@@ -42,13 +42,45 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             studioId: true,
             passwordHash: true,
             active: true,
+            loginAttempts: true,
+            lockedUntil: true,
           },
         })
 
         if (!user || !user.active) return null
 
+        // ── Verificar bloqueo por intentos fallidos ───────────────────────────
+        const now = new Date()
+        if (user.lockedUntil && user.lockedUntil > now) {
+          // Cuenta bloqueada — no revelar que la cuenta existe
+          return null
+        }
+
         const valid = await bcrypt.compare(String(credentials.password), user.passwordHash)
-        if (!valid) return null
+
+        if (!valid) {
+          // Incrementar contador — bloquear a partir del 10° intento (15 min)
+          const newAttempts = user.loginAttempts + 1
+          const lockedUntil = newAttempts >= 10
+            ? new Date(now.getTime() + 15 * 60 * 1000)
+            : null
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              loginAttempts: newAttempts,
+              ...(lockedUntil ? { lockedUntil } : {}),
+            },
+          }).catch(() => {})
+          return null
+        }
+
+        // Login exitoso — resetear contador
+        if (user.loginAttempts > 0 || user.lockedUntil) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { loginAttempts: 0, lockedUntil: null },
+          }).catch(() => {})
+        }
 
         // Lazy re-hash: migra hashes de cost=10 a cost=8 en el próximo login
         if (bcrypt.getRounds(user.passwordHash) > 8) {

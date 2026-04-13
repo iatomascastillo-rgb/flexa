@@ -104,14 +104,15 @@ const BASIC_FEATURES = [
   'Días de acceso sin crédito (configurable)',
   'Notificaciones automáticas por email',
   'Resumen mensual automático',
+  'Análisis IA (prueba de 14 días)',
   'Soporte de equipo todo el día',
 ]
 
-const PRO_FEATURES = [
-  ...BASIC_FEATURES,
-  'Análisis inteligente con IA',
+const PRO_EXTRA_FEATURES = [
+  'Análisis inteligente con IA avanzada (Claude Sonnet)',
   'Detección de alumnas que se alejan',
   'Optimización de agenda con IA',
+  'Alertas en tiempo real: ausencias y paquetes vencidos',
   'Recurrencia semanal automática',
   'Soporte prioritario',
 ]
@@ -131,7 +132,7 @@ const FAQS = [
   },
   {
     q: '¿En qué consiste el análisis inteligente?',
-    a: 'Flexa analiza los datos de tu estudio (reservas, pagos, asistencia) con inteligencia artificial y te genera un diagnóstico mensual en palabras simples: qué funciona, qué alumnas están por irse y qué ajustes podés hacer para mejorar. Sin planillas ni dashboards complicados.',
+    a: 'Flexa analiza los datos de tu estudio (reservas, pagos, asistencia) con inteligencia artificial y te genera diagnósticos en palabras simples: qué funciona, qué alumnas están por irse y qué ajustes podés hacer. El plan Pro usa Claude Sonnet, el modelo más avanzado de Anthropic, para análisis más ricos y detallados. El plan Básico incluye una versión de prueba del análisis de IA.',
   },
   {
     q: '¿Puedo migrar desde mi planilla o sistema actual?',
@@ -354,7 +355,10 @@ export default function LandingPage() {
               <span className="text-5xl font-light text-white" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>$22.000</span>
               <p className="mb-6 mt-1 text-xs text-white/50">ARS / mes</p>
               <ul className="mb-6 space-y-2">
-                {PRO_FEATURES.map((f) => (
+                <li className="flex items-start gap-2 text-sm font-medium text-white/60">
+                  <span style={{ flexShrink: 0, marginTop: '2px' }}>+</span>Todo lo del plan Básico
+                </li>
+                {PRO_EXTRA_FEATURES.map((f) => (
                   <li key={f} className="flex items-start gap-2 text-sm text-white/80">
                     <span style={{ color: 'var(--sage-light)', flexShrink: 0, marginTop: '2px' }}>✓</span>{f}
                   </li>

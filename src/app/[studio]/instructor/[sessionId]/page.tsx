@@ -16,7 +16,7 @@ export default async function InstructorSessionPage({
   const { studio, sessionId } = await params
 
   const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/instructor`)
+  if (!session?.user?.id) redirect(`/${studio}/login?callbackUrl=/${studio}/instructor`)
   if (session.user.role === 'STUDENT') redirect(`/${studio}`)
 
   const tenant = await getTenantBySlug(studio)

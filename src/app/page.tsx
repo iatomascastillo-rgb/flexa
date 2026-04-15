@@ -5,6 +5,7 @@ import { HeroGeometric } from '@/components/HeroGeometric'
 import { BeamsBackground } from '@/components/ui/beams-background'
 import { AIInsightsCarousel } from '@/components/AIInsightsCarousel'
 import { AnimatedText } from '@/components/ui/animated-text'
+import { PricingSection } from '@/components/PricingSection'
 
 // ── Datos ──────────────────────────────────────────────────────────────────────
 
@@ -53,7 +54,7 @@ const AI_INSIGHTS = [
   {
     tag: 'Resumen del mes',
     title: 'Tu estudio en números',
-    quote: 'La facturación creció un 18% respecto al mes anterior. La clase de Reformer del martes a las 18hs es tu turno estrella con 95% de ocupación. Considerá abrir un segundo turno.',
+    quote: 'La facturación creció un 18% respecto al mes anterior. La clase de Reformer del martes a las 18hs es tu turno estrella con 95% de ocupación.',
   },
   {
     tag: 'Tu agenda',
@@ -63,7 +64,7 @@ const AI_INSIGHTS = [
   {
     tag: 'Alumnas que se alejan',
     title: 'Quién está perdiendo el ritmo',
-    quote: '4 alumnas activas no reservaron en las últimas 2 semanas. 2 tienen créditos por vencer esta semana. Un mensaje hoy puede recuperar al menos la mitad.',
+    quote: '3 alumnas no reservaron en 2 semanas y 2 faltaron a sus últimas 3 clases sin cancelar. Todas tienen créditos activos. Un mensaje hoy puede recuperar al menos la mitad.',
   },
 ]
 
@@ -95,27 +96,6 @@ const TESTIMONIALS_PLACEHOLDER = [
   },
 ]
 
-const BASIC_FEATURES = [
-  'Reservas y cancelaciones online',
-  'Panel de alumnos con créditos',
-  'Pagos con MercadoPago',
-  'Lista de espera automática',
-  'Branding personalizado',
-  'Días de acceso sin crédito (configurable)',
-  'Notificaciones automáticas por email',
-  'Resumen mensual automático',
-  'Análisis IA (prueba de 14 días)',
-  'Soporte de equipo todo el día',
-]
-
-const PRO_EXTRA_FEATURES = [
-  'Análisis inteligente con IA avanzada (Claude Sonnet)',
-  'Detección de alumnas que se alejan',
-  'Optimización de agenda con IA',
-  'Alertas en tiempo real: ausencias y paquetes vencidos',
-  'Recurrencia semanal automática',
-  'Soporte prioritario',
-]
 
 const FAQS = [
   {
@@ -150,6 +130,14 @@ export default function LandingPage() {
   return (
     <div style={{ background: 'var(--cream)', color: 'var(--ink)' }}>
 
+      {/* ── Announcement Bar ── */}
+      <div className="w-full py-2.5 px-5 text-center text-sm" style={{ background: 'var(--ink)', color: 'white' }}>
+        <span>🚀 <strong>¡LANZAMIENTO FLEXA!</strong> 50% OFF en el plan anual (Miembros Fundadores).{' '}</span>
+        <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: 'var(--terracotta)', color: 'white' }}>
+          ÚLTIMOS 10 CUPOS
+        </span>
+      </div>
+
       {/* ── Nav ── */}
       <header
         className="sticky top-0 z-50 border-b"
@@ -159,7 +147,19 @@ export default function LandingPage() {
           <div className="flex items-center">
             <AnimatedLogo height={42} />
           </div>
-          <nav className="flex items-center gap-3">
+          <nav className="flex items-center gap-1">
+            {/* Links de sección — solo desktop */}
+            <a href="#como-funciona" className="hidden md:inline-block rounded-xl px-3 py-2 text-sm font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--stone)' }}>
+              Cómo funciona
+            </a>
+            <a href="#precios" className="hidden md:inline-block rounded-xl px-3 py-2 text-sm font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--stone)' }}>
+              Precios
+            </a>
+            <a href="#ia" className="hidden md:inline-block rounded-xl px-3 py-2 text-sm font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--stone)' }}>
+              IA
+            </a>
+            {/* Separador */}
+            <span className="hidden md:block mx-2 h-4 w-px" style={{ background: '#D1C9C0' }} />
             <Link href="/login" className="rounded-xl px-4 py-2 text-sm font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--stone)' }}>
               Iniciar sesión
             </Link>
@@ -209,7 +209,7 @@ export default function LandingPage() {
           <p className="mx-auto mb-14 max-w-md text-center text-base" style={{ color: 'var(--stone)' }}>
             Flexa automatiza la gestión para que puedas enfocarte en lo que hacés bien: enseñar.
           </p>
-          <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2 md:max-w-2xl md:mx-auto">
             {FEATURES.map((f, i) => (
               <div key={i} className="rounded-2xl p-6" style={{ background: 'var(--cream)', border: '1px solid #E8E0D6' }}>
                 <div className="mb-4">{f.icon}</div>
@@ -222,6 +222,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Análisis inteligente (IA) ── */}
+      <div id="ia">
       <BeamsBackground intensity="medium">
         <div className="mx-auto max-w-5xl px-5 py-24">
           <div className="mb-16 text-center">
@@ -273,6 +274,7 @@ export default function LandingPage() {
           </p>
         </div>
       </BeamsBackground>
+      </div>
 
       {/* ── Personalización ── */}
       <section className="py-20" style={{ background: 'var(--cream)' }}>
@@ -288,7 +290,7 @@ export default function LandingPage() {
               >
                 Cada estudio es diferente.
                 <br />
-                <em className="not-italic" style={{ color: 'var(--terracotta)' }}>Flexa se adapta al tuyo.</em>
+                <em className="not-italic font-semibold" style={{ color: 'var(--terracotta)' }}>Flexa se adapta al tuyo.</em>
               </h2>
               <p className="text-base leading-relaxed" style={{ color: 'var(--stone)' }}>
                 Desde las políticas de pago hasta el diseño de la app que ven tus alumnas.
@@ -312,65 +314,21 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Strip social proof ── */}
+      <div className="py-8 px-5 text-center" style={{ background: 'var(--ink)' }}>
+        <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.7)' }}>
+          <span style={{ color: '#F59E0B' }}>✦</span>{' '}
+          Crecemos por recomendación, escuchando a cada estudio —{' '}
+          <em className="not-italic font-medium" style={{ color: 'white' }}>sus necesidades definen nuestras próximas funciones.</em>
+        </p>
+      </div>
+
       {/* ── Por qué Flexa / Comparación (oculto hasta tener data real) ── */}
 
       {/* ── Testimoniales (ocultos hasta tener resultados reales) ── */}
 
       {/* ── Precios ── */}
-      <section id="precios" className="py-20" style={{ background: 'white' }}>
-        <div className="mx-auto max-w-5xl px-5">
-          <p className="mb-2 text-center text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--sage)' }}>
-            Precios
-          </p>
-          <h2
-            className="mb-4 text-center text-4xl font-light md:text-5xl"
-            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
-          >
-            Simple y transparente
-          </h2>
-          <p className="mx-auto mb-14 max-w-md text-center text-base" style={{ color: 'var(--stone)' }}>
-            14 días de prueba gratis. Sin tarjeta de crédito. Cancelás cuando querés.
-          </p>
-          <div className="grid gap-6 md:grid-cols-2 md:max-w-2xl md:mx-auto">
-            <div className="rounded-2xl p-7" style={{ background: 'var(--cream)', border: '1px solid #E8E0D6' }}>
-              <p className="mb-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Básico</p>
-              <span className="text-5xl font-light" style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}>$12.000</span>
-              <p className="mb-6 mt-1 text-xs" style={{ color: 'var(--stone)' }}>ARS / mes</p>
-              <ul className="mb-6 space-y-2">
-                {BASIC_FEATURES.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm" style={{ color: 'var(--stone)' }}>
-                    <span style={{ color: 'var(--sage)', flexShrink: 0, marginTop: '2px' }}>✓</span>{f}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/registro" className="block w-full rounded-xl py-3 text-center text-sm font-medium transition-opacity hover:opacity-80" style={{ background: 'var(--sage)', color: 'white' }}>
-                Empezar gratis
-              </Link>
-            </div>
-            <div className="rounded-2xl p-7" style={{ background: 'var(--ink)', border: '1px solid var(--ink)' }}>
-              <div className="mb-1 flex items-center justify-between">
-                <p className="text-xs font-medium uppercase tracking-widest text-white/60">Pro</p>
-                <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ background: '#9B6DFF', color: 'white' }}>Con análisis IA</span>
-              </div>
-              <span className="text-5xl font-light text-white" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>$22.000</span>
-              <p className="mb-6 mt-1 text-xs text-white/50">ARS / mes</p>
-              <ul className="mb-6 space-y-2">
-                <li className="flex items-start gap-2 text-sm font-medium text-white/60">
-                  <span style={{ flexShrink: 0, marginTop: '2px' }}>+</span>Todo lo del plan Básico
-                </li>
-                {PRO_EXTRA_FEATURES.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-white/80">
-                    <span style={{ color: 'var(--sage-light)', flexShrink: 0, marginTop: '2px' }}>✓</span>{f}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/registro" className="block w-full rounded-xl py-3 text-center text-sm font-medium transition-opacity hover:opacity-85" style={{ background: 'var(--sage)', color: 'white' }}>
-                Empezar gratis
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PricingSection />
 
       {/* ── FAQ ── */}
       <section className="py-20" style={{ background: 'var(--cream)' }}>
@@ -401,7 +359,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Soporte + Contacto ── */}
-      <section className="py-20" style={{ background: 'white' }}>
+      <section className="py-20" style={{ background: 'var(--cream)' }}>
         <div className="mx-auto max-w-xl px-5 text-center">
           <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--sage)' }}>
             Siempre cerca
@@ -417,9 +375,9 @@ export default function LandingPage() {
             Nuestro equipo está disponible para resolver cualquier duda que tengas.
             Si algo no funciona como esperás, lo resolvemos con vos.
           </p>
-          <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+          <div className="flex justify-center">
             <a
-              href="https://wa.me/5491100000000?text=Hola%2C%20quiero%20saber%20m%C3%A1s%20sobre%20Flexa"
+              href="https://wa.me/5491156972644?text=Hola%2C%20estoy%20interesado%20en%20Flexa!"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2.5 rounded-2xl px-6 py-3.5 text-sm font-medium transition-opacity hover:opacity-85"
@@ -429,17 +387,6 @@ export default function LandingPage() {
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
               </svg>
               Escribir por WhatsApp
-            </a>
-            <a
-              href="mailto:hola@flexa.app"
-              className="flex items-center gap-2.5 rounded-2xl px-6 py-3.5 text-sm font-medium transition-opacity hover:opacity-70"
-              style={{ border: '1.5px solid #E8E0D6', color: 'var(--stone)' }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                <polyline points="22,6 12,13 2,6" />
-              </svg>
-              hola@flexa.app
             </a>
           </div>
         </div>
@@ -453,7 +400,7 @@ export default function LandingPage() {
             style={{ fontFamily: 'var(--font-cormorant, serif)' }}
           >
             Empezá hoy,
-            <br />gratis por 14 días
+            <br />gratis por 30 días
           </h2>
           <p className="mb-8 text-base text-white/75">Sin tarjeta de crédito. Sin compromisos. Cancelás cuando querés.</p>
           <Link
@@ -479,7 +426,7 @@ export default function LandingPage() {
                 { label: 'Precios', href: '#precios' },
                 { label: 'Privacidad', href: '#' },
                 { label: 'Términos', href: '#' },
-                { label: 'Contacto', href: 'mailto:hola@flexa.app' },
+                { label: 'Contacto', href: 'https://wa.me/5491156972644?text=Hola%2C%20estoy%20interesado%20en%20Flexa!' },
               ].map((l) => (
                 <a key={l.label} href={l.href} className="text-sm transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.4)' }}>
                   {l.label}

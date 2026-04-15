@@ -175,7 +175,7 @@ export function HeroGeometric() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.38, ease: 'easeOut' }}
         >
-          Flexa automatiza reservas, pagos y te ayuda a tomar mejores decisiones con IA, sin complicaciones.
+          <strong style={{ color: '#8B5CF6', fontWeight: 700 }}>Flexa</strong> automatiza reservas, pagos y te ayuda a tomar mejores decisiones con IA, sin complicaciones.
         </motion.p>
 
         {/* CTAs */}
@@ -200,6 +200,30 @@ export function HeroGeometric() {
             Ver cómo funciona
           </a>
         </motion.div>
+
+        {/* Founder subtext */}
+        <motion.div
+          className="mt-5 inline-flex flex-wrap items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm"
+          style={{ background: 'var(--ink)', color: 'rgba(255,255,255,0.75)' }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.65, ease: 'easeOut' }}
+        >
+          <span>Unite como</span>
+          <span
+            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
+            style={{ background: 'rgba(92,122,94,0.25)', color: '#8FC892', border: '1px solid rgba(92,122,94,0.4)' }}
+          >
+            ✦ Miembro Fundador
+          </span>
+          <span>y congelá tu precio con</span>
+          <span
+            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
+            style={{ background: '#F59E0B', color: '#1C1400' }}
+          >
+            50% OFF por un año
+          </span>
+        </motion.div>
       </div>
 
       {/* ── Mockups ── */}
@@ -217,29 +241,47 @@ export function HeroGeometric() {
             style={{ background: '#2C2C2C', boxShadow: '0 16px 48px rgba(0,0,0,0.12)' }}
           >
             <div className="overflow-hidden rounded-[1.5rem]" style={{ background: 'var(--cream)' }}>
+              {/* Status bar */}
               <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ background: 'var(--sage)' }}>
                 <span className="text-xs text-white/60">9:41</span>
                 <span className="text-sm font-light text-white" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>Mi Pilates</span>
                 <span className="text-xs text-white/60">●●</span>
               </div>
-              <div className="px-3 py-3">
-                <div className="mb-3 rounded-xl p-3" style={{ background: 'var(--sage)' }}>
-                  <p className="mb-0.5 text-xs font-medium uppercase tracking-widest text-white/60">Créditos</p>
-                  <p className="text-4xl font-light text-white" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>8</p>
-                  <div className="mt-1.5 h-1.5 rounded-full bg-white/20">
+              <div className="px-3 py-3 space-y-2.5">
+                {/* Créditos */}
+                <div className="rounded-xl p-3" style={{ background: 'var(--sage)' }}>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-widest text-white/60">Créditos</p>
+                      <p className="text-4xl font-light text-white leading-none mt-0.5" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>8</p>
+                    </div>
+                    <p className="text-xs text-white/50 mb-0.5">Vencen 15/05</p>
+                  </div>
+                  <div className="mt-2 h-1.5 rounded-full bg-white/20">
                     <div className="h-full w-2/3 rounded-full bg-white/60" />
                   </div>
                 </div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Próximas clases</p>
-                {[
-                  { name: 'Pilates Mat', date: 'Mañana 10:00' },
-                  { name: 'Reformer', date: 'Jue 18:00' },
-                ].map((c, i) => (
-                  <div key={i} className="mb-1.5 rounded-xl px-2.5 py-2" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
-                    <p className="text-xs font-medium" style={{ color: 'var(--ink)' }}>{c.name}</p>
-                    <p className="text-xs" style={{ color: 'var(--stone)' }}>{c.date}</p>
+                {/* Noticias */}
+                <div>
+                  <p className="mb-1.5 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Noticias</p>
+                  <div className="rounded-xl px-2.5 py-2 flex items-start gap-2" style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.15)' }}>
+                    <span style={{ color: '#8B5CF6', fontSize: '11px', marginTop: '1px' }}>✦</span>
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--ink)' }}>Nueva clase de Reformer agregada para el martes a las 18hs.</p>
                   </div>
-                ))}
+                </div>
+                {/* Próximas reservas */}
+                <div>
+                  <p className="mb-1.5 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Mis reservas</p>
+                  {[
+                    { name: 'Pilates Mat', date: 'Mañana · 10:00' },
+                    { name: 'Reformer', date: 'Jue · 18:00' },
+                  ].map((c, i) => (
+                    <div key={i} className="mb-1.5 flex items-center justify-between rounded-xl px-2.5 py-2" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+                      <p className="text-xs font-medium" style={{ color: 'var(--ink)' }}>{c.name}</p>
+                      <p className="text-xs" style={{ color: 'var(--stone)' }}>{c.date}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -252,6 +294,7 @@ export function HeroGeometric() {
             className="overflow-hidden rounded-2xl"
             style={{ background: 'white', border: '1px solid #E8E0D6', boxShadow: '0 16px 48px rgba(0,0,0,0.08)' }}
           >
+            {/* Header */}
             <div className="flex items-center justify-between px-5 py-3.5" style={{ background: 'var(--ink)' }}>
               <div>
                 <p className="text-xs text-white/40 uppercase tracking-widest">Panel admin</p>
@@ -259,46 +302,56 @@ export function HeroGeometric() {
               </div>
               <div className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium text-white" style={{ background: 'var(--sage)' }}>A</div>
             </div>
+            {/* KPIs */}
             <div className="grid grid-cols-3 gap-px" style={{ background: '#E8E0D6' }}>
               {[
-                { label: 'Activas', value: '10' },
-                { label: 'Este mes', value: '$52k' },
-                { label: 'Ocupación', value: '74%' },
+                { label: 'Alumnas', value: '42' },
+                { label: 'Este mes', value: '$180k' },
+                { label: 'Ocupación', value: '78%' },
               ].map((s, i) => (
-                <div key={i} className="px-3 py-3 text-center" style={{ background: 'var(--cream)' }}>
+                <div key={i} className="px-3 py-2.5 text-center" style={{ background: 'var(--cream)' }}>
                   <p className="text-base font-light" style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}>{s.value}</p>
                   <p className="text-xs" style={{ color: 'var(--stone)' }}>{s.label}</p>
                 </div>
               ))}
             </div>
-            <div className="px-4 py-4">
-              <div className="mb-3 rounded-xl p-3.5" style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.15)' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <span style={{ color: '#8B5CF6', fontSize: '11px' }}>✦</span>
-                    <p className="text-xs font-medium" style={{ color: '#8B5CF6' }}>IA Flexa · Marzo</p>
+            <div className="px-4 py-3">
+              {/* Mini bar chart */}
+              <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Ocupación semanal</p>
+              <div className="flex items-end gap-1 h-10 mb-3">
+                {[
+                  { day: 'L', pct: 70 },
+                  { day: 'M', pct: 95 },
+                  { day: 'X', pct: 50 },
+                  { day: 'J', pct: 85 },
+                  { day: 'V', pct: 75 },
+                  { day: 'S', pct: 60 },
+                ].map((b) => (
+                  <div key={b.day} className="flex flex-1 flex-col items-center gap-0.5">
+                    <div
+                      className="w-full rounded-sm"
+                      style={{
+                        height: `${b.pct * 0.4}px`,
+                        background: b.pct >= 90 ? 'var(--sage)' : b.pct >= 70 ? 'rgba(92,122,94,0.45)' : 'rgba(92,122,94,0.2)',
+                      }}
+                    />
+                    <span className="text-[9px]" style={{ color: 'var(--stone)' }}>{b.day}</span>
                   </div>
-                </div>
+                ))}
+              </div>
+              {/* IA alert */}
+              <div className="rounded-xl p-3" style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.15)' }}>
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: '#FEF3C7', color: '#92400E' }}>
-                    ⚠ Riesgo de abandono
-                  </span>
+                  <span style={{ color: '#8B5CF6', fontSize: '11px' }}>✦</span>
+                  <p className="text-xs font-medium" style={{ color: '#8B5CF6' }}>IA Flexa · Abril</p>
                 </div>
-                <p className="text-xs leading-relaxed" style={{ color: 'var(--stone)' }}>
-                  4 alumnas llevan más de 2 semanas sin venir. Contactarlas hoy puede recuperar al menos 2.
+                <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: '#FEF3C7', color: '#92400E' }}>
+                  ⚠ Riesgo de abandono
+                </span>
+                <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--stone)' }}>
+                  3 alumnas sin reservas y 2 con ausencias repetidas. Contactarlas hoy puede recuperar al menos 3.
                 </p>
               </div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Alumnas recientes</p>
-              {[
-                { name: 'Marta G.', status: 'Activa', color: '#5C7A5E', bg: '#EDF4ED' },
-                { name: 'Julia R.', status: 'Sin paquete', color: '#C4774A', bg: '#F5E8DE' },
-                { name: 'Ana P.', status: 'Activa', color: '#5C7A5E', bg: '#EDF4ED' },
-              ].map((s, i) => (
-                <div key={i} className="flex items-center justify-between py-1.5" style={{ borderBottom: i < 2 ? '1px solid #F0EBE5' : 'none' }}>
-                  <p className="text-xs" style={{ color: 'var(--ink)' }}>{s.name}</p>
-                  <span className="rounded-full px-2 py-0.5 text-xs" style={{ background: s.bg, color: s.color }}>{s.status}</span>
-                </div>
-              ))}
             </div>
           </div>
         </div>

@@ -98,7 +98,7 @@ export default async function OnboardingStep3({
   const { studio } = await params
 
   const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/onboarding/3`)
+  if (!session?.user?.id) redirect(`/${studio}/login?callbackUrl=/${studio}/onboarding/3`)
   if (session.user.role !== 'STUDIO_ADMIN') redirect(`/${studio}`)
 
   const tenant = await getTenantBySlug(studio)

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getTenantBySlug } from '@/lib/tenant'
 import { auth } from '@/lib/auth'
 import { BottomNav } from './_components/BottomNav'
+import OnboardingGuide from './_components/OnboardingGuide'
 
 const cormorant = Cormorant_Garamond({
   variable: '--font-cormorant',
@@ -192,6 +193,9 @@ export default async function StudioLayout({
         {children}
       </main>
       <BottomNav studio={studio} role={role} pendingCount={instructorPending} navColor={branding?.navColor ?? undefined} />
+      {(role === 'STUDENT' || role === 'INSTRUCTOR') && (
+        <OnboardingGuide studio={studio} role={role as 'STUDENT' | 'INSTRUCTOR'} />
+      )}
     </div>
   )
 }

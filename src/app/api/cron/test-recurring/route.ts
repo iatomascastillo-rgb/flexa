@@ -45,14 +45,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // ── Body ─────────────────────────────────────────────────────────────────
-  let body: { studioId?: unknown; year?: unknown; month?: unknown; dryRun?: unknown; fromDate?: unknown }
+  let body: { studioId?: unknown; year?: unknown; month?: unknown; dryRun?: unknown; fromDate?: unknown; skipGrace?: unknown }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 })
   }
 
-  const { studioId, year, month, dryRun, fromDate: fromDateRaw } = body
+  const { studioId, year, month, dryRun, fromDate: fromDateRaw, skipGrace } = body
 
   if (typeof studioId !== 'string' || !studioId) {
     return NextResponse.json({ error: 'studioId requerido' }, { status: 400 })
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const monthLabel = `${year}-${String(month + 1).padStart(2, '0')}`
-  const opts = { verbose: true, fromDate }
+  const opts = { verbose: true, fromDate, skipGrace: skipGrace === true }
 
   // ── Dry-run ───────────────────────────────────────────────────────────────
   if (dryRun === true) {

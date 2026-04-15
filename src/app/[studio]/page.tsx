@@ -71,7 +71,7 @@ export default async function HomePage({
   const { studio } = await params
   const session = await auth()
 
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}`)
+  if (!session?.user?.id) redirect(`/${studio}/login?callbackUrl=/${studio}`)
 
   // Instructores van directo a su panel
   if (session.user.role === 'INSTRUCTOR') redirect(`/${studio}/instructor`)
@@ -80,14 +80,14 @@ export default async function HomePage({
   if (!tenant) notFound()
 
   // Seguridad: el alumno solo puede ver su propio estudio
-  if (session.user.studioId !== tenant.studioId) redirect(`/login?callbackUrl=/${studio}`)
+  if (session.user.studioId !== tenant.studioId) redirect(`/${studio}/login?callbackUrl=/${studio}`)
 
   const userId = session.user.id
   const studioId = tenant.studioId
   const now = new Date()
 
   // ── Fetch en paralelo ─────────────────────────────────────────────────────
-  const [creditPackages, settings, graceCount, upcomingBookings, pendingPackage, branding] =
+  const [creditPackages, settings, graceCount, upcomingBookings, pendingPackage, branding, news] =
     await Promise.all([
       // Paquetes con créditos disponibles (FIFO)
       prisma.userPackage.findMany({
@@ -149,13 +149,23 @@ export default async function HomePage({
         where: { studioId },
         select: { coverUrl: true, instagramUrl: true, whatsappUrl: true, websiteUrl: true },
       }).catch(() => null),
+
+      // Noticias publicadas del estudio (últimas 5)
+      prisma.studioNews.findMany({
+        where: { studioId, publishedAt: { lte: now }, archivedAt: null },
+        orderBy: { publishedAt: 'desc' },
+        take: 5,
+        select: { id: true, title: true, content: true, imageUrl: true, publishedAt: true },
+      }),
     ])
 
   // ── Calcular créditos ─────────────────────────────────────────────────────
-  const totalCredits = creditPackages.reduce((sum, p) => sum + p.classesRemaining, 0)
-  const primaryPkg = creditPackages[0] // FIFO: el que vence antes
+  const activePackages  = creditPackages.filter(p => p.expiresAt.getTime() > now.getTime())
+  const expiredPackages = creditPackages.filter(p => p.expiresAt.getTime() <= now.getTime())
+  const totalCredits = activePackages.reduce((sum, p) => sum + p.classesRemaining, 0)
+  const primaryPkg = activePackages[0] // FIFO: el que vence antes (solo activos)
   // Créditos de recuperación activos (pueden ser varios)
-  const recoveryPackages = creditPackages.filter(p => p.isRecovery)
+  const recoveryPackages = activePackages.filter(p => p.isRecovery)
 
   // ── Alerta de créditos por vencer (entre 0 y 3 días) ─────────────────────
   // Solo paquetes que AÚN no vencieron (msUntilExpiry > 0) y vencen en ≤3 días
@@ -316,6 +326,35 @@ export default async function HomePage({
         </section>
       )}
 
+      {/* ── Paquetes vencidos con créditos sin usar ── */}
+      {expiredPackages.length > 0 && (
+        <section
+          className="mb-4 rounded-2xl p-4"
+          style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}
+        >
+          <div className="flex items-start gap-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" x2="12" y1="8" y2="12" />
+              <line x1="12" x2="12.01" y1="16" y2="16" />
+            </svg>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium" style={{ color: '#B91C1C' }}>
+                {expiredPackages.length === 1
+                  ? 'Tu paquete venció'
+                  : `${expiredPackages.length} paquetes vencidos`}
+              </p>
+              <p className="mt-0.5 text-xs" style={{ color: '#6B5B52' }}>
+                {expiredPackages.reduce((s, p) => s + p.classesRemaining, 0)} crédito
+                {expiredPackages.reduce((s, p) => s + p.classesRemaining, 0) !== 1 ? 's' : ''} sin usar
+                vencido{expiredPackages.reduce((s, p) => s + p.classesRemaining, 0) !== 1 ? 's' : ''}.
+                Contactate con el estudio para más información.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ── Paquete pendiente de pago ── */}
       {pendingPackage && (
         <section
@@ -440,6 +479,47 @@ export default async function HomePage({
             >
               Activo
             </span>
+          </div>
+        </section>
+      )}
+
+      {/* ── Noticias del estudio ── */}
+      {news.length > 0 && (
+        <section className="mb-4">
+          <h2
+            className="mb-3 text-xl font-light"
+            style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
+          >
+            Noticias
+          </h2>
+          <div className="space-y-3">
+            {news.map(n => (
+              <div
+                key={n.id}
+                className="rounded-2xl overflow-hidden"
+                style={{ background: 'white', border: '1px solid #E8E0D6' }}
+              >
+                {n.imageUrl && (
+                  <img
+                    src={n.imageUrl}
+                    alt={n.title}
+                    className="w-full object-cover"
+                    style={{ maxHeight: 200 }}
+                  />
+                )}
+                <div className="px-4 py-3">
+                  <p className="text-sm font-medium mb-1" style={{ color: 'var(--ink)' }}>{n.title}</p>
+                  <p className="text-xs" style={{ color: 'var(--stone)', whiteSpace: 'pre-line' }}>{n.content}</p>
+                  <p className="mt-2 text-xs" style={{ color: '#C0B8AE' }}>
+                    {new Date(n.publishedAt!).toLocaleDateString('es-AR', {
+                      day: 'numeric',
+                      month: 'long',
+                      timeZone: 'America/Argentina/Buenos_Aires',
+                    })}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       )}

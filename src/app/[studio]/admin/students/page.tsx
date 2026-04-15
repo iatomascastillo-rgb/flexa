@@ -44,7 +44,13 @@ export default async function AdminStudentsPage({
       active: true,
       userPackages: {
         where: { paymentStatus: 'APPROVED' },
-        select: { classesRemaining: true, isTrial: true },
+        select: { classesRemaining: true, isTrial: true, expiresAt: true },
+      },
+      bookings: {
+        where: { status: 'CONFIRMED' },
+        orderBy: { classSession: { date: 'desc' } },
+        take: 1,
+        select: { classSession: { select: { date: true } } },
       },
     },
   })
@@ -58,13 +64,24 @@ export default async function AdminStudentsPage({
       })
     : students
 
-  const studentsWithCredits = filtered.map((s) => ({
-    ...s,
-    // Solo contar paquetes con créditos disponibles
-    totalCredits: s.userPackages
-      .filter((p) => p.classesRemaining > 0)
-      .reduce((sum, p) => sum + p.classesRemaining, 0),
-  }))
+  const now = new Date()
+
+  const studentsWithCredits = filtered.map((s) => {
+    const lastBookingDate = s.bookings[0]?.classSession.date ?? null
+    const daysSinceLastBooking = lastBookingDate
+      ? Math.floor((now.getTime() - lastBookingDate.getTime()) / (24 * 60 * 60 * 1000))
+      : null
+
+    const activeCredits = s.userPackages
+      .filter((p) => p.classesRemaining > 0 && p.expiresAt.getTime() > now.getTime())
+      .reduce((sum, p) => sum + p.classesRemaining, 0)
+
+    const expiredCredits = s.userPackages
+      .filter((p) => p.classesRemaining > 0 && p.expiresAt.getTime() <= now.getTime())
+      .reduce((sum, p) => sum + p.classesRemaining, 0)
+
+    return { ...s, totalCredits: activeCredits, expiredCredits, daysSinceLastBooking }
+  })
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -196,7 +213,13 @@ export default async function AdminStudentsPage({
                   )}
                 </p>
                 <p className="truncate text-xs" style={{ color: 'var(--stone)' }}>
-                  {student.email}
+                  {student.daysSinceLastBooking === null
+                    ? 'Sin reservas'
+                    : student.daysSinceLastBooking === 0
+                    ? 'Clase hoy'
+                    : student.daysSinceLastBooking > 21
+                    ? <span style={{ color: 'var(--terracotta)' }}>{`Sin clase hace ${student.daysSinceLastBooking}d`}</span>
+                    : `Hace ${student.daysSinceLastBooking}d`}
                 </p>
               </div>
 
@@ -211,6 +234,11 @@ export default async function AdminStudentsPage({
                 <p className="text-xs" style={{ color: 'var(--stone)' }}>
                   crédito{student.totalCredits !== 1 ? 's' : ''}
                 </p>
+                {student.expiredCredits > 0 && (
+                  <p className="text-xs font-medium" style={{ color: 'var(--terracotta)' }}>
+                    {student.expiredCredits} vencido{student.expiredCredits !== 1 ? 's' : ''}
+                  </p>
+                )}
               </div>
 
               {/* Chevron */}

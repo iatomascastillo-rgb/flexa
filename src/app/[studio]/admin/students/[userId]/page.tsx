@@ -217,7 +217,7 @@ export default async function AdminStudentPage({
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
   // ── Fetch en paralelo ─────────────────────────────────────────────────────
-  const [student, activePackages, recentPackages, recentTransactions, bookingsLastMonth, availablePackages] =
+  const [student, activePackages, expiredPackagesWithCredits, recentPackages, recentTransactions, bookingsLastMonth, lastBooking, availablePackages] =
     await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -233,9 +233,9 @@ export default async function AdminStudentPage({
       },
     }),
 
-    // Paquetes con saldo disponible
+    // Paquetes con saldo disponible y NO vencidos
     prisma.userPackage.findMany({
-      where: { userId, studioId, paymentStatus: 'APPROVED', classesRemaining: { gt: 0 } },
+      where: { userId, studioId, paymentStatus: 'APPROVED', classesRemaining: { gt: 0 }, expiresAt: { gte: now } },
       orderBy: { expiresAt: 'asc' },
       select: {
         id: true,
@@ -243,6 +243,19 @@ export default async function AdminStudentPage({
         classesTotal: true,
         expiresAt: true,
         paymentMethod: true,
+        package: { select: { name: true } },
+      },
+    }),
+
+    // Paquetes vencidos con créditos sin usar
+    prisma.userPackage.findMany({
+      where: { userId, studioId, paymentStatus: 'APPROVED', classesRemaining: { gt: 0 }, expiresAt: { lt: now } },
+      orderBy: { expiresAt: 'desc' },
+      select: {
+        id: true,
+        classesRemaining: true,
+        classesTotal: true,
+        expiresAt: true,
         package: { select: { name: true } },
       },
     }),
@@ -282,6 +295,13 @@ export default async function AdminStudentPage({
       where: { studioId, userId, status: 'CONFIRMED', createdAt: { gte: thirtyDaysAgo } },
     }),
 
+    // Última reserva confirmada (para días sin clase)
+    prisma.booking.findFirst({
+      where: { studioId, userId, status: 'CONFIRMED' },
+      orderBy: { classSession: { date: 'desc' } },
+      select: { classSession: { select: { date: true } } },
+    }),
+
     // Paquetes activos del estudio (para asignación manual)
     prisma.package.findMany({
       where: { studioId, active: true },
@@ -294,6 +314,12 @@ export default async function AdminStudentPage({
   if (!student || student.studioId !== studioId) notFound()
 
   const totalCredits = activePackages.reduce((sum, p) => sum + p.classesRemaining, 0)
+  const totalExpiredCredits = expiredPackagesWithCredits.reduce((sum, p) => sum + p.classesRemaining, 0)
+
+  const lastBookingDate = lastBooking?.classSession.date ?? null
+  const daysSinceLastBooking = lastBookingDate
+    ? Math.floor((now.getTime() - lastBookingDate.getTime()) / (24 * 60 * 60 * 1000))
+    : null
 
   function fmtARS(centavos: number): string {
     return new Intl.NumberFormat('es-AR', {
@@ -371,23 +397,62 @@ export default async function AdminStudentPage({
 
       {/* ── Resumen: créditos + actividad ── */}
       <div className="mb-5 grid grid-cols-2 gap-3">
-        <div className="rounded-2xl p-4" style={{ background: 'var(--sage)', color: 'white' }}>
+        <div
+          className="rounded-2xl p-4"
+          style={{ background: totalCredits > 0 ? 'var(--sage)' : '#9E8E82', color: 'white' }}
+        >
           <p className="mb-1 text-xs font-medium uppercase tracking-widest opacity-75">Créditos</p>
           <span className="text-5xl font-light leading-none" style={{ fontFamily: 'var(--font-cormorant, serif)' }}>
             {totalCredits}
           </span>
           {activePackages.length > 0 && (
-            <p className="mt-2 text-xs opacity-60">vence {fmtDateShort(activePackages[0].expiresAt)}</p>
+            <p className="mt-2 text-xs opacity-60">vence {fmtDateShort(activePackages[0]!.expiresAt)}</p>
+          )}
+          {totalCredits === 0 && totalExpiredCredits > 0 && (
+            <p className="mt-2 text-xs opacity-80">{totalExpiredCredits} vencido{totalExpiredCredits !== 1 ? 's' : ''}</p>
+          )}
+          {totalCredits === 0 && totalExpiredCredits === 0 && (
+            <p className="mt-2 text-xs opacity-60">sin paquete activo</p>
           )}
         </div>
         <div className="rounded-2xl p-4" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
-          <p className="mb-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Clases (30d)</p>
-          <span className="text-5xl font-light leading-none" style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}>
+          <p className="mb-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+            {daysSinceLastBooking === null ? 'Sin reservas' : daysSinceLastBooking === 0 ? 'Clase hoy' : `Hace ${daysSinceLastBooking}d`}
+          </p>
+          <span
+            className="text-5xl font-light leading-none"
+            style={{
+              fontFamily: 'var(--font-cormorant, serif)',
+              color: daysSinceLastBooking !== null && daysSinceLastBooking > 21 ? 'var(--terracotta)' : 'var(--ink)',
+            }}
+          >
             {bookingsLastMonth}
           </span>
-          <p className="mt-2 text-xs" style={{ color: 'var(--stone)' }}>confirmadas</p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--stone)' }}>clases (30d)</p>
         </div>
       </div>
+
+      {/* ── Alerta créditos vencidos ── */}
+      {expiredPackagesWithCredits.length > 0 && (
+        <div
+          className="mb-5 rounded-2xl px-4 py-3 flex items-start gap-3"
+          style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
+            <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>
+          </svg>
+          <div>
+            <p className="text-sm font-medium" style={{ color: '#B91C1C' }}>
+              {totalExpiredCredits} crédito{totalExpiredCredits !== 1 ? 's' : ''} vencido{totalExpiredCredits !== 1 ? 's' : ''} sin usar
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: '#6B5B52' }}>
+              {expiredPackagesWithCredits.map(p =>
+                `${p.classesRemaining}/${p.classesTotal} de ${p.package?.name ?? 'Paquete'} (venció ${fmtDateShort(p.expiresAt)})`
+              ).join(' · ')}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Paquetes activos ── */}
       {activePackages.length > 0 && (
@@ -618,12 +683,35 @@ export default async function AdminStudentPage({
           Últimas transacciones
         </h2>
 
-        {recentTransactions.length === 0 ? (
+        {recentTransactions.length === 0 && expiredPackagesWithCredits.length === 0 ? (
           <p className="text-sm" style={{ color: 'var(--stone)' }}>
             Sin movimientos.
           </p>
         ) : (
           <div className="space-y-2">
+            {/* Entradas virtuales por créditos vencidos */}
+            {expiredPackagesWithCredits.map((p) => (
+              <div
+                key={`expired-${p.id}`}
+                className="flex items-center justify-between rounded-xl px-4 py-3"
+                style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}
+              >
+                <div>
+                  <p className="text-sm font-medium" style={{ color: '#B91C1C' }}>
+                    Créditos vencidos
+                    <span className="ml-2 font-normal text-xs" style={{ color: '#6B5B52' }}>
+                      · {p.package?.name ?? 'Paquete'}
+                    </span>
+                  </p>
+                  <p className="text-xs" style={{ color: '#6B5B52' }}>
+                    Venció {fmtDateShort(p.expiresAt)} · sin usar
+                  </p>
+                </div>
+                <span className="text-sm font-medium" style={{ color: '#B91C1C' }}>
+                  -{p.classesRemaining}
+                </span>
+              </div>
+            ))}
             {recentTransactions.map((tx) => (
               <div
                 key={tx.id}

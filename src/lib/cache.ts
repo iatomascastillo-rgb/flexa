@@ -54,7 +54,7 @@ export function getMonthlyAdminMetrics(
   studioId: string,
   monthStart: Date,
   prevMonthStart: Date,
-  fourMonthsAgo: Date,
+  historyStart: Date,
 ) {
   const monthKey = `${monthStart.getUTCFullYear()}-${monthStart.getUTCMonth()}`
   return unstable_cache(
@@ -74,6 +74,9 @@ export function getMonthlyAdminMetrics(
         expiringPackages,
         revenueHistoryPackages,
         monthAttendances,
+        newStudentsHistoryRaw,
+        monthCancellationsDetail,
+        monthNoShowsDetail,
       ] = await Promise.all([
         // Paquetes aprobados este mes (ingresos)
         prisma.userPackage.findMany({
@@ -122,7 +125,7 @@ export function getMonthlyAdminMetrics(
           where: { studioId, status: 'CANCELLED', cancelledAt: { gte: monthStart } },
         }),
 
-        // Alumnos en riesgo: activos, con historial, sin reserva en 21 días
+        // Alumnos en riesgo: activos, con historial, sin reserva en 21 días (incluye última reserva)
         prisma.user.findMany({
           where: {
             studioId,
@@ -133,7 +136,16 @@ export function getMonthlyAdminMetrics(
               some: { status: 'CONFIRMED' },
             },
           },
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+            bookings: {
+              where: { status: 'CONFIRMED' },
+              orderBy: { classSession: { date: 'desc' } },
+              take: 1,
+              select: { classSession: { select: { date: true } } },
+            },
+          },
           orderBy: { name: 'asc' },
           take: 20,
         }),
@@ -154,12 +166,12 @@ export function getMonthlyAdminMetrics(
           orderBy: { expiresAt: 'asc' },
         }),
 
-        // Ingresos de los últimos 3 meses (para tendencia de 4 meses total con el actual)
+        // Ingresos históricos para tendencia de 6 meses
         prisma.userPackage.findMany({
           where: {
             studioId,
             paymentStatus: 'APPROVED',
-            activatedAt: { gte: fourMonthsAgo, lt: monthStart },
+            activatedAt: { gte: historyStart, lt: monthStart },
             packageId: { not: null },
           },
           select: { package: { select: { price: true } }, activatedAt: true },
@@ -173,6 +185,24 @@ export function getMonthlyAdminMetrics(
             classSession: { date: { gte: monthStart } },
           },
           select: { userId: true, user: { select: { name: true } } },
+        }),
+
+        // Alumnas nuevas historial (para tendencia 6 meses)
+        prisma.user.findMany({
+          where: { studioId, role: 'STUDENT', createdAt: { gte: historyStart } },
+          select: { createdAt: true },
+        }),
+
+        // Cancelaciones del mes con alumna (para detalle)
+        prisma.booking.findMany({
+          where: { studioId, status: 'CANCELLED', cancelledAt: { gte: monthStart } },
+          select: { userId: true, user: { select: { id: true, name: true } } },
+        }),
+
+        // No-shows del mes con alumna (para detalle)
+        prisma.booking.findMany({
+          where: { studioId, attendanceStatus: 'NO_SHOW', classSession: { date: { gte: monthStart } } },
+          select: { userId: true, user: { select: { id: true, name: true } } },
         }),
       ])
 
@@ -188,6 +218,24 @@ export function getMonthlyAdminMetrics(
         .sort((a, b) => b.count - a.count)
         .slice(0, 5)
 
+      // Top 5 cancellers del mes
+      const cancelMap = new Map<string, { id: string; name: string; count: number }>()
+      for (const b of monthCancellationsDetail) {
+        const e = cancelMap.get(b.userId)
+        if (e) e.count++
+        else cancelMap.set(b.userId, { id: b.user.id, name: b.user.name ?? '?', count: 1 })
+      }
+      const topCancellersMonth = [...cancelMap.values()].sort((a, b) => b.count - a.count).slice(0, 5)
+
+      // Top 5 no-showers del mes
+      const noShowMap = new Map<string, { id: string; name: string; count: number }>()
+      for (const b of monthNoShowsDetail) {
+        const e = noShowMap.get(b.userId)
+        if (e) e.count++
+        else noShowMap.set(b.userId, { id: b.user.id, name: b.user.name ?? '?', count: 1 })
+      }
+      const topNoShowsMonth = [...noShowMap.values()].sort((a, b) => b.count - a.count).slice(0, 5)
+
       return {
         monthlyPackages,
         prevMonthPackages,
@@ -199,6 +247,9 @@ export function getMonthlyAdminMetrics(
         expiringPackages,
         revenueHistoryPackages,
         topStudentsThisMonth,
+        newStudentsHistory: newStudentsHistoryRaw.map(u => u.createdAt),
+        topCancellersMonth,
+        topNoShowsMonth,
       }
     },
     [`admin-metrics-${studioId}-${monthKey}`],

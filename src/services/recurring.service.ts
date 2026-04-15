@@ -225,7 +225,7 @@ export async function generateForStudio(
   studioId: string,
   year: number,
   month: number,
-  opts: { verbose?: boolean; fromDate?: Date } = {},
+  opts: { verbose?: boolean; fromDate?: Date; skipGrace?: boolean } = {},
 ): Promise<Omit<StudioResult, 'studioId'> & { decisions?: ScheduleDecision[] }> {
 
   // Una sola ronda de queries en paralelo
@@ -394,8 +394,11 @@ export async function generateForStudio(
 
       let result: { outcome: RecurringOutcome; packageId?: string }
       try {
+        const effectiveSettings = opts.skipGrace
+          ? { ...settings, gracePeriodEnabled: false }
+          : settings
         result = await prisma.$transaction((tx) =>
-          createRecurringBookingInTx(tx, schedule.userId, studioId, session.id, settings),
+          createRecurringBookingInTx(tx, schedule.userId, studioId, session.id, effectiveSettings),
         )
       } catch (err) {
         console.error(`[recurring.service] Error creating booking user=${schedule.userId} session=${session.id}:`, err)

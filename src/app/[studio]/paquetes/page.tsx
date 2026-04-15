@@ -29,7 +29,7 @@ export default async function PaquetesPage({
   const { payment } = await searchParams
 
   const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/paquetes`)
+  if (!session?.user?.id) redirect(`/${studio}/login?callbackUrl=/${studio}/paquetes`)
 
   // Admins van a la gestión de paquetes; instructores vuelven al inicio
   if (session.user.role === 'STUDIO_ADMIN') redirect(`/${studio}/admin/settings/paquetes`)
@@ -37,7 +37,7 @@ export default async function PaquetesPage({
 
   const tenant = await getTenantBySlug(studio)
   if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect(`/login?callbackUrl=/${studio}/paquetes`)
+  if (session.user.studioId !== tenant.studioId) redirect(`/${studio}/login?callbackUrl=/${studio}/paquetes`)
 
   const studioId = tenant.studioId
   const userId = session.user.id

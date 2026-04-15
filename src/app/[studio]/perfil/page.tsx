@@ -47,7 +47,7 @@ export default async function PerfilPage({
 
   async function logoutAction() {
     'use server'
-    await signOut({ redirectTo: `/login?callbackUrl=/${studio}/perfil` })
+    await signOut({ redirectTo: `/${studio}/login` })
   }
 
   async function updateProfileAction(formData: FormData) {
@@ -99,12 +99,12 @@ export default async function PerfilPage({
   }
 
   const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/perfil`)
+  if (!session?.user?.id) redirect(`/${studio}/login?callbackUrl=/${studio}/perfil`)
 
   const tenant = await getTenantBySlug(studio)
   if (!tenant) notFound()
 
-  if (session.user.studioId !== tenant.studioId) redirect(`/login?callbackUrl=/${studio}/perfil`)
+  if (session.user.studioId !== tenant.studioId) redirect(`/${studio}/login?callbackUrl=/${studio}/perfil`)
 
   // Leer datos frescos de DB (la sesión puede estar desactualizada)
   const dbUser = await prisma.user.findUnique({
@@ -164,7 +164,7 @@ export default async function PerfilPage({
         </div>
       </div>
 
-      {/* ── INSTRUCTOR: panel de clases ── */}
+      {/* ── INSTRUCTOR: panel de clases + ayuda ── */}
       {isInstructor && (
         <div className="mb-4 space-y-2">
           <p className="mb-1 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
@@ -178,6 +178,17 @@ export default async function PerfilPage({
                 <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
                 <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
                 <path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" />
+              </svg>
+            }
+          />
+          <NavCard
+            href={`/${studio}/ayuda`}
+            label="Ayuda"
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <path d="M12 17h.01" />
               </svg>
             }
           />
@@ -347,6 +358,52 @@ export default async function PerfilPage({
               </div>
             )
           })()}
+
+          {/* Link de acceso directo para compartir */}
+          {(() => {
+            const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '')
+            const loginUrl = appUrl ? `${appUrl}/${studio}/login` : `/${studio}/login`
+            return (
+              <div
+                className="rounded-2xl px-4 py-4"
+                style={{ background: '#F0F7F0', border: '1px solid var(--sage)' }}
+              >
+                <p className="mb-1 text-xs font-medium" style={{ color: 'var(--sage)' }}>
+                  Link de acceso para alumnas
+                </p>
+                <p className="mb-2 text-xs" style={{ color: 'var(--stone)' }}>
+                  Compartí este link o usalo como QR para que tus alumnas ingresen directo a tu estudio:
+                </p>
+                <a
+                  href={`/${studio}/login`}
+                  className="block truncate rounded-xl border px-3 py-2 font-mono text-xs"
+                  style={{ borderColor: '#C8DFC8', background: 'white', color: 'var(--sage)' }}
+                >
+                  {loginUrl}
+                </a>
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
+      {/* ── STUDENT: ayuda ── */}
+      {!isStudioAdmin && !isInstructor && !isSuperAdmin && (
+        <div className="mb-4 space-y-2">
+          <p className="mb-1 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+            Soporte
+          </p>
+          <NavCard
+            href={`/${studio}/ayuda`}
+            label="Ayuda"
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <path d="M12 17h.01" />
+              </svg>
+            }
+          />
         </div>
       )}
 

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { getMonthlyAdminMetrics } from '@/lib/cache'
 import { InsightCard } from '@/components/InsightCard'
 import { fmtTime, fmtARS, todayARStart } from '@/lib/formatters'
+import AdminOnboardingGuide from '../_components/AdminOnboardingGuide'
 
 const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
@@ -22,13 +23,13 @@ export default async function AdminDashboardPage({
   const tab = sp.tab === 'mensual' ? 'mensual' : sp.tab === 'ia' ? 'ia' : 'dia'
 
   const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/admin`)
+  if (!session?.user?.id) redirect(`/${studio}/login?callbackUrl=/${studio}/admin`)
   if (session.user.role === 'SUPER_ADMIN') redirect('/superadmin')
   if (session.user.role !== 'STUDIO_ADMIN') redirect(`/${studio}`)
 
   const tenant = await getTenantBySlug(studio)
   if (!tenant) notFound()
-  if (session.user.studioId !== tenant.studioId) redirect(`/login?callbackUrl=/${studio}/admin`)
+  if (session.user.studioId !== tenant.studioId) redirect(`/${studio}/login?callbackUrl=/${studio}/admin`)
 
   const studioId = tenant.studioId
   const todayStart = todayARStart()
@@ -36,12 +37,12 @@ export default async function AdminDashboardPage({
   const now = new Date()
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-  const fourMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1))
+  const historyStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1))
 
   // ── Queries dinámicas (tiempo real) + métricas mensuales (cache 1h) ──────
   const [
     [todaySessions, pendingPaymentPackages, studentsWithoutPackageCount, monthSessions, monthNoShows],
-    { monthlyPackages, prevMonthPackages, newStudentsCount, totalActiveStudents, activeWithBookingsThisMonth, monthCancellations, atRiskStudents, expiringPackages, revenueHistoryPackages, topStudentsThisMonth },
+    { monthlyPackages, prevMonthPackages, newStudentsCount, totalActiveStudents, activeWithBookingsThisMonth, monthCancellations, atRiskStudents, expiringPackages, revenueHistoryPackages, topStudentsThisMonth, newStudentsHistory, topCancellersMonth, topNoShowsMonth },
   ] = await Promise.all([
     Promise.all([
       // Sesiones de hoy con asistencia
@@ -113,7 +114,7 @@ export default async function AdminDashboardPage({
     ]),
 
     // Métricas mensuales cacheadas 1 hora
-    getMonthlyAdminMetrics(studioId, monthStart, prevMonthStart, fourMonthsAgo),
+    getMonthlyAdminMetrics(studioId, monthStart, prevMonthStart, historyStart),
   ])
 
   // ── Cómputos del día ──────────────────────────────────────────────────────
@@ -189,16 +190,15 @@ export default async function AdminDashboardPage({
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
 
-  // ── Tendencia de ingresos (últimos 4 meses) ───────────────────────────────
+  // ── Tendencia de ingresos (últimos 6 meses) ───────────────────────────────
   const revenueByMonth: { label: string; amount: number }[] = []
-  for (let i = 3; i >= 1; i--) {
+  for (let i = 5; i >= 1; i--) {
     const mStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
-    const mEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1))
-    const label = mStart.toLocaleDateString('es-AR', { month: 'short', timeZone: 'UTC' })
-    const amount =
-      revenueHistoryPackages
-        .filter((p) => p.activatedAt != null && p.activatedAt >= mStart && p.activatedAt < mEnd)
-        .reduce((sum, p) => sum + (p.package?.price ?? 0), 0) / 100
+    const mEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1))
+    const label  = mStart.toLocaleDateString('es-AR', { month: 'short', timeZone: 'UTC' })
+    const amount = revenueHistoryPackages
+      .filter((p) => { if (!p.activatedAt) return false; const d = new Date(p.activatedAt); return d >= mStart && d < mEnd })
+      .reduce((sum, p) => sum + (p.package?.price ?? 0), 0) / 100
     revenueByMonth.push({ label, amount })
   }
   revenueByMonth.push({
@@ -206,6 +206,21 @@ export default async function AdminDashboardPage({
     amount: ingresosDelMes,
   })
   const maxRevenue = Math.max(...revenueByMonth.map((m) => m.amount), 1)
+
+  // ── Tendencia de alumnas nuevas (últimos 6 meses) ────────────────────────
+  const newStudentsByMonth: { label: string; count: number }[] = []
+  for (let i = 5; i >= 1; i--) {
+    const mStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
+    const mEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1))
+    const label  = mStart.toLocaleDateString('es-AR', { month: 'short', timeZone: 'UTC' })
+    const count  = newStudentsHistory.filter(d => { const dt = new Date(d); return dt >= mStart && dt < mEnd }).length
+    newStudentsByMonth.push({ label, count })
+  }
+  newStudentsByMonth.push({
+    label: monthStart.toLocaleDateString('es-AR', { month: 'short', timeZone: 'UTC' }),
+    count: newStudentsCount,
+  })
+  const maxNewStudents = Math.max(...newStudentsByMonth.map(m => m.count), 1)
 
   const nowLabel = new Date().toLocaleDateString('es-AR', {
     weekday: 'long',
@@ -227,6 +242,7 @@ export default async function AdminDashboardPage({
 
   return (
     <div className="mx-auto max-w-md px-4 pt-8 pb-24">
+      <AdminOnboardingGuide studio={studio} />
       {/* Header */}
       <div className="mb-5">
         <h1
@@ -579,19 +595,28 @@ export default async function AdminDashboardPage({
                     alumna{atRiskStudents.length !== 1 ? 's' : ''} en riesgo de abandono
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {atRiskStudents.slice(0, 8).map((s) => (
-                    <Link
-                      key={s.id}
-                      href={`/${studio}/admin/students/${s.id}`}
-                      className="rounded-full px-3 py-1 text-xs transition-opacity hover:opacity-75"
-                      style={{ background: '#FEF3C7', color: '#92400E' }}
-                    >
-                      {s.name}
-                    </Link>
-                  ))}
+                <div className="space-y-1.5">
+                  {atRiskStudents.slice(0, 8).map((s) => {
+                    const lastDate = s.bookings[0]?.classSession.date ? new Date(s.bookings[0].classSession.date) : null
+                    const daysAgo = lastDate
+                      ? Math.floor((now.getTime() - lastDate.getTime()) / (24 * 60 * 60 * 1000))
+                      : null
+                    return (
+                      <Link
+                        key={s.id}
+                        href={`/${studio}/admin/students/${s.id}`}
+                        className="flex items-center justify-between rounded-xl px-3 py-2 transition-opacity hover:opacity-75"
+                        style={{ background: '#FEF3C7' }}
+                      >
+                        <span className="text-xs font-medium" style={{ color: '#92400E' }}>{s.name}</span>
+                        <span className="text-xs" style={{ color: '#B45309' }}>
+                          {daysAgo !== null ? `hace ${daysAgo}d` : 'sin historial'}
+                        </span>
+                      </Link>
+                    )
+                  })}
                   {atRiskStudents.length > 8 && (
-                    <span className="rounded-full px-3 py-1 text-xs" style={{ background: '#F3F4F6', color: 'var(--stone)' }}>
+                    <span className="block rounded-xl px-3 py-1.5 text-xs text-center" style={{ background: '#F3F4F6', color: 'var(--stone)' }}>
                       +{atRiskStudents.length - 8} más
                     </span>
                   )}
@@ -600,6 +625,50 @@ export default async function AdminDashboardPage({
             </section>
           )}
 
+          {/* ── Ausencias recurrentes ── */}
+          {(() => {
+            const chronicNoShows = topNoShowsMonth.filter(s => s.count >= 3)
+            if (chronicNoShows.length === 0) return null
+            return (
+              <section>
+                <p className="mb-3 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+                  Ausencias recurrentes este mes
+                </p>
+                <div
+                  className="rounded-2xl px-5 py-4"
+                  style={{ background: 'white', border: '1px solid #E8E0D6' }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <p
+                      className="text-3xl font-light"
+                      style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--terracotta)' }}
+                    >
+                      {chronicNoShows.length}
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                      alumna{chronicNoShows.length !== 1 ? 's' : ''} con 3 o más ausencias
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    {chronicNoShows.map((s) => (
+                      <Link
+                        key={s.id}
+                        href={`/${studio}/admin/students/${s.id}`}
+                        className="flex items-center justify-between rounded-xl px-3 py-2 transition-opacity hover:opacity-75"
+                        style={{ background: '#FFF1F0', border: '1px solid #FECDD3' }}
+                      >
+                        <span className="text-xs font-medium" style={{ color: '#9F1239' }}>{s.name}</span>
+                        <span className="text-xs font-medium" style={{ color: '#E11D48' }}>
+                          {s.count} ausencia{s.count !== 1 ? 's' : ''}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            )
+          })()}
+
           {/* ── Accesos rápidos ── */}
           <section>
             <p className="mb-2 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
@@ -607,10 +676,12 @@ export default async function AdminDashboardPage({
             </p>
             <div className="grid grid-cols-2 gap-2">
               {[
+                { href: `/${studio}/admin/noticias`, label: 'Noticias', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z" /></svg> },
                 { href: `/${studio}/admin/students`, label: 'Alumnos', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
                 { href: `/${studio}/admin/instructores`, label: 'Instructores', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" /></svg> },
                 { href: `/${studio}/admin/clases`, label: 'Gestionar clases', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14" /><path d="M5 12h14" /><rect width="18" height="18" x="3" y="3" rx="2" /></svg> },
                 { href: `/${studio}/admin/sesiones`, label: 'Sesiones', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg> },
+                { href: `/${studio}/admin/settings/mercadopago`, label: 'MercadoPago', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg> },
                 { href: `/${studio}/admin/settings/branding`, label: 'Apariencia', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r="2.5" /><circle cx="6.5" cy="13.5" r="2.5" /><circle cx="17" cy="17" r="2.5" /><circle cx="3" cy="3" r="2" /></svg> },
                 { href: `/${studio}/admin/settings/politicas`, label: 'Políticas', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="4" y1="21" y2="14" /><line x1="4" x2="4" y1="10" y2="3" /><line x1="12" x2="12" y1="21" y2="12" /><line x1="12" x2="12" y1="8" y2="3" /><line x1="20" x2="20" y1="21" y2="16" /><line x1="20" x2="20" y1="12" y2="3" /><line x1="1" x2="7" y1="14" y2="14" /><line x1="9" x2="15" y1="8" y2="8" /><line x1="17" x2="23" y1="16" y2="16" /></svg> },
                 { href: `/${studio}/admin/settings/feriados`, label: 'Feriados y cierres', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /><line x1="8" x2="8" y1="14" y2="14" /><line x1="12" x2="12" y1="14" y2="14" /><line x1="16" x2="16" y1="14" y2="14" /></svg> },
@@ -883,39 +954,91 @@ export default async function AdminDashboardPage({
             <p className="mb-3 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
               Cancelaciones y ausencias
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div
-                className="rounded-2xl p-4 text-center"
-                style={{ background: 'white', border: '1px solid #E8E0D6' }}
-              >
-                <p
-                  className="text-3xl font-light"
-                  style={{
-                    fontFamily: 'var(--font-cormorant, serif)',
-                    color: monthCancellations > 10 ? 'var(--terracotta)' : 'var(--ink)',
-                  }}
-                >
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="rounded-2xl p-4 text-center" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+                <p className="text-3xl font-light" style={{ fontFamily: 'var(--font-cormorant, serif)', color: monthCancellations > 10 ? 'var(--terracotta)' : 'var(--ink)' }}>
                   {monthCancellations}
                 </p>
                 <p className="mt-0.5 text-xs" style={{ color: 'var(--stone)' }}>Cancelaciones</p>
               </div>
-              <div
-                className="rounded-2xl p-4 text-center"
-                style={{ background: 'white', border: '1px solid #E8E0D6' }}
-              >
-                <p
-                  className="text-3xl font-light"
-                  style={{
-                    fontFamily: 'var(--font-cormorant, serif)',
-                    color: monthNoShows > 5 ? '#D97706' : 'var(--ink)',
-                  }}
-                >
+              <div className="rounded-2xl p-4 text-center" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+                <p className="text-3xl font-light" style={{ fontFamily: 'var(--font-cormorant, serif)', color: monthNoShows > 5 ? '#D97706' : 'var(--ink)' }}>
                   {monthNoShows}
                 </p>
                 <p className="mt-0.5 text-xs" style={{ color: 'var(--stone)' }}>Ausencias (no-show)</p>
               </div>
             </div>
+
+            {/* Detalle: top cancellers */}
+            {topCancellersMonth.length > 0 && (
+              <div className="mb-3 rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+                <p className="px-4 pt-3 pb-1 text-xs font-medium" style={{ color: 'var(--stone)' }}>Más cancelaciones</p>
+                {topCancellersMonth.map((s) => (
+                  <Link
+                    key={s.id}
+                    href={`/${studio}/admin/students/${s.id}`}
+                    className="flex items-center justify-between px-4 py-2.5 border-t transition-opacity hover:opacity-75"
+                    style={{ borderColor: '#F3EEE9' }}
+                  >
+                    <span className="text-sm" style={{ color: 'var(--ink)' }}>{s.name}</span>
+                    <span className="text-xs font-medium rounded-full px-2.5 py-0.5" style={{ background: '#FEE2E2', color: '#B91C1C' }}>
+                      {s.count}×
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {/* Detalle: top no-shows */}
+            {topNoShowsMonth.length > 0 && (
+              <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+                <p className="px-4 pt-3 pb-1 text-xs font-medium" style={{ color: 'var(--stone)' }}>Más ausencias</p>
+                {topNoShowsMonth.map((s) => (
+                  <Link
+                    key={s.id}
+                    href={`/${studio}/admin/students/${s.id}`}
+                    className="flex items-center justify-between px-4 py-2.5 border-t transition-opacity hover:opacity-75"
+                    style={{ borderColor: '#F3EEE9' }}
+                  >
+                    <span className="text-sm" style={{ color: 'var(--ink)' }}>{s.name}</span>
+                    <span className="text-xs font-medium rounded-full px-2.5 py-0.5" style={{ background: '#FEF3C7', color: '#D97706' }}>
+                      {s.count}×
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </section>
+
+          {/* ── Tendencia alumnas nuevas ── */}
+          {newStudentsByMonth.some(m => m.count > 0) && (
+            <section className="mb-5">
+              <p className="mb-3 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+                Alumnas nuevas por mes
+              </p>
+              <div className="rounded-2xl px-5 py-4" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
+                <div className="flex items-end gap-3 h-20">
+                  {newStudentsByMonth.map((m, i) => {
+                    const isCurrentMonth = i === newStudentsByMonth.length - 1
+                    const heightPct = maxNewStudents > 0 ? Math.max((m.count / maxNewStudents) * 100, 4) : 4
+                    return (
+                      <div key={m.label} className="flex flex-1 flex-col items-center gap-1.5">
+                        <p className="text-xs font-medium" style={{ color: isCurrentMonth ? 'var(--sage)' : 'var(--stone)' }}>
+                          {m.count > 0 ? `+${m.count}` : '—'}
+                        </p>
+                        <div className="w-full rounded-t-lg" style={{
+                          height: `${heightPct}%`,
+                          background: isCurrentMonth ? 'var(--sage)' : '#E8E0D6',
+                          minHeight: '4px',
+                        }} />
+                        <p className="text-xs capitalize" style={{ color: 'var(--stone)' }}>{m.label}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </section>
+          )}
         </>
       )}
 

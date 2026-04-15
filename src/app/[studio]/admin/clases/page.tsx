@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { requireStudioAdminPage, checkStudioAdmin } from '@/lib/auth-guards'
 import { prisma } from '@/lib/prisma'
 import { ApplyRecurringButton } from './ApplyRecurringButton'
+import { DayScheduleBuilder } from './DayScheduleBuilder'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -200,6 +201,61 @@ async function removeScheduleTemplateAction(formData: FormData) {
     where: { id: templateId, studioId },
     data: { active: false },
   })
+
+  revalidatePath(`/${studio}/admin/clases`)
+}
+
+async function addDayScheduleAction(formData: FormData) {
+  'use server'
+  const studio = formData.get('studio') as string
+  const dayOfWeek = formData.get('dayOfWeek') as string
+  const slotsRaw = formData.get('slotsJson') as string
+
+  const guard = await checkStudioAdmin(studio)
+  if (!guard) return
+  const { studioId } = guard
+  if (!dayOfWeek || !slotsRaw) return
+
+  type SlotInput = { classTypeId: string; time: string; instructorName: string | null; roomId: string | null }
+  let slots: SlotInput[]
+  try {
+    slots = JSON.parse(slotsRaw)
+  } catch {
+    return
+  }
+
+  const validSlots = slots.filter(
+    (s) => typeof s.classTypeId === 'string' && s.classTypeId && typeof s.time === 'string' && s.time,
+  )
+  if (validSlots.length === 0) return
+
+  const dates = getDatesUntilEndOfNextMonth(dayOfWeek)
+
+  for (const slot of validSlots) {
+    const { classTypeId, time, instructorName, roomId } = slot
+
+    // Upsert template
+    const existing = await prisma.classScheduleTemplate.findFirst({
+      where: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time, roomId },
+      select: { id: true },
+    })
+    if (existing) {
+      await prisma.classScheduleTemplate.update({
+        where: { id: existing.id },
+        data: { active: true, instructorName, roomId },
+      })
+    } else {
+      await prisma.classScheduleTemplate.create({
+        data: { studioId, classTypeId, dayOfWeek: dayOfWeek as never, time, instructorName, roomId },
+      })
+    }
+
+    // Generar sesiones (idempotente)
+    await prisma.classSession.createMany({
+      data: dates.map((date) => ({ studioId, classTypeId, date, time, instructorName, roomId })),
+      skipDuplicates: true,
+    })
+  }
 
   revalidatePath(`/${studio}/admin/clases`)
 }
@@ -504,90 +560,19 @@ export default async function AdminGestionarClasesPage({
               </div>
             )}
 
-            {/* Agregar template */}
-            <div className="rounded-2xl p-4" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
-              <p className="mb-3 text-xs font-medium" style={{ color: 'var(--stone)' }}>
-                {sortedTemplates.length === 0 ? 'Agregar primer horario' : 'Agregar horario'}
+            {/* Agregar template — Day Builder */}
+            <DayScheduleBuilder
+              studio={studio}
+              classTypes={activeClassTypes}
+              activeRooms={activeRooms}
+              action={addDayScheduleAction}
+            />
+
+            {sortedTemplates.length > 0 && (
+              <p className="mt-3 text-center text-xs" style={{ color: 'var(--stone)' }}>
+                El cron genera las sesiones del próximo mes automáticamente el día 25.
               </p>
-              <form action={addScheduleTemplateAction} className="space-y-3">
-                <input type="hidden" name="studio" value={studio} />
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Tipo de clase</label>
-                  <select
-                    name="classTypeId" required
-                    className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
-                    style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
-                  >
-                    {activeClassTypes.map((ct) => (
-                      <option key={ct.id} value={ct.id}>{ct.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Día de la semana</label>
-                    <select
-                      name="dayOfWeek"
-                      className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
-                      style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
-                    >
-                      {DAYS_ARRAY.map((d) => (
-                        <option key={d.value} value={d.value}>{d.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Horario</label>
-                    <input
-                      type="time" name="time" defaultValue="10:00" required
-                      className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
-                      style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Instructor (opcional)</label>
-                  <input
-                    type="text" name="instructorName" placeholder="ej: María García"
-                    className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
-                    style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
-                  />
-                </div>
-
-                {activeRooms.length > 0 && (
-                  <div>
-                    <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>Salón</label>
-                    <select
-                      name="roomId"
-                      className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[var(--sage)]"
-                      style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
-                    >
-                      <option value="">Sin salón asignado</option>
-                      {activeRooms.map((r) => (
-                        <option key={r.id} value={r.id}>{r.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  className="w-full rounded-xl py-2.5 text-sm font-medium transition-opacity hover:opacity-80"
-                  style={{ background: '#EDF4ED', color: 'var(--sage)' }}
-                >
-                  + Agregar a horario fijo
-                </button>
-              </form>
-
-              {sortedTemplates.length > 0 && (
-                <p className="mt-3 text-center text-xs" style={{ color: 'var(--stone)' }}>
-                  El cron genera las sesiones del próximo mes automáticamente el día 25.
-                </p>
-              )}
-            </div>
+            )}
           </>
         )}
       </section>

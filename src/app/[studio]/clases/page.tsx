@@ -135,12 +135,12 @@ export default async function ClasesPage({
   const { error, success, salon } = await searchParams
 
   const session = await auth()
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/${studio}/clases`)
+  if (!session?.user?.id) redirect(`/${studio}/login?callbackUrl=/${studio}/clases`)
 
   const tenant = await getTenantBySlug(studio)
   if (!tenant) notFound()
 
-  if (session.user.studioId !== tenant.studioId) redirect(`/login?callbackUrl=/${studio}/clases`)
+  if (session.user.studioId !== tenant.studioId) redirect(`/${studio}/login?callbackUrl=/${studio}/clases`)
 
   const userId = session.user.id
   const studioId = tenant.studioId

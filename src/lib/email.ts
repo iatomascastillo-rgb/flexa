@@ -111,7 +111,7 @@ function renderTemplate(template: EmailTemplate, data: Record<string, unknown>):
           </h1>
           <p style="margin:0 0 20px;font-size:14px;color:#6B5B52;line-height:1.6;">
             Tu estudio <strong>${data.studioName}</strong> fue creado exitosamente.
-            Tenés <strong>14 días de prueba gratuita</strong> para explorar todas las funcionalidades.
+            Tenés <strong>30 días de prueba gratuita</strong> para explorar todas las funcionalidades.
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
             <tr>

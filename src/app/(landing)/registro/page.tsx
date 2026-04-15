@@ -361,7 +361,7 @@ export default function RegistroPage() {
         </div>
 
         <p className="mt-6 text-center text-xs" style={{ color: 'var(--stone)' }}>
-          14 días de prueba gratis · Sin tarjeta de crédito
+          30 días de prueba gratis · Sin tarjeta de crédito
         </p>
       </div>
     </div>

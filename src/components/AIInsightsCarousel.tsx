@@ -14,7 +14,7 @@ export function AIInsightsCarousel({ insights }: { insights: Insight[] }) {
   const inView = useInView(ref, { once: true, margin: '-60px' })
 
   return (
-    <div ref={ref} className="grid gap-6 md:grid-cols-3">
+    <div ref={ref} className="grid gap-6 md:grid-cols-2">
       {insights.map((insight, i) => (
         <motion.div
           key={i}

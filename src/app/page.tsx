@@ -39,15 +39,6 @@ const FEATURES = [
     title: 'Lista de espera automática',
     body: 'Si alguien cancela, la primera en la lista recibe su lugar sin que hagas nada.',
   },
-  {
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      </svg>
-    ),
-    title: 'Días de acceso sin crédito',
-    body: 'Definís cuántos días puede asistir una alumna después de quedarse sin créditos. El límite es configurable por vos.',
-  },
 ]
 
 const AI_INSIGHTS = [
@@ -66,15 +57,20 @@ const AI_INSIGHTS = [
     title: 'Quién está perdiendo el ritmo',
     quote: '3 alumnas no reservaron en 2 semanas y 2 faltaron a sus últimas 3 clases sin cancelar. Todas tienen créditos activos. Un mensaje hoy puede recuperar al menos la mitad.',
   },
+  {
+    tag: 'Asistencia',
+    title: 'Ausencias que no avisaron',
+    quote: '4 alumnas faltaron 3 clases seguidas sin cancelar. No significa que se van — pero sí que algo pasó. Vale la pena escribirles antes de que el vínculo se enfríe.',
+  },
 ]
 
 const CUSTOMIZATIONS = [
-  { title: 'Días de acceso sin crédito', body: 'Cuántos días puede asistir una alumna después de quedarse sin créditos. El bloqueo es automático.' },
-  { title: 'Política de cancelación', body: 'Elegís si liberar el lugar a lista de espera o mantenerlo con alerta.' },
+  { title: 'Gestión de ausencias', body: 'Definís qué pasa cuando una alumna falta sin cancelar: registro automático, alerta para vos, o ambas.' },
+  { title: 'Política de cancelación', body: 'Configurás con cuántas horas de anticipación se puede cancelar. Si cancela fuera de ese plazo, el crédito se descuenta igual.' },
   { title: 'Branding propio', body: 'Colores, logo y nombre del estudio. Tus alumnas ven tu marca, no la nuestra.' },
   { title: 'Tipos de clase y cupos', body: 'Reformer, Mat, Duet, grupal. Cada tipo con su capacidad y sus reglas.' },
   { title: 'Paquetes a medida', body: 'Definís la cantidad de clases, el precio y el vencimiento de cada paquete.' },
-  { title: 'Recurrencia semanal', body: 'Generás todo el mes siguiente con un clic, respetando feriados.' },
+  { title: 'Recurrencia semanal', body: 'El mes siguiente se genera solo: mismos horarios, respetando feriados. Una de las funciones más pedidas por los estudios que usan Flexa.' },
 ]
 
 
@@ -133,7 +129,7 @@ export default function LandingPage() {
       {/* ── Announcement Bar ── */}
       <div className="w-full py-2.5 px-5 text-center text-sm" style={{ background: 'var(--ink)', color: 'white' }}>
         <span>🚀 <strong>¡LANZAMIENTO FLEXA!</strong> 50% OFF en el plan anual (Miembros Fundadores).{' '}</span>
-        <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: 'var(--terracotta)', color: 'white' }}>
+        <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: 'rgba(139,92,246,0.25)', color: '#8B5CF6', border: '1px solid rgba(139,92,246,0.4)' }}>
           ÚLTIMOS 10 CUPOS
         </span>
       </div>
@@ -167,6 +163,19 @@ export default function LandingPage() {
               Empezar gratis
             </Link>
           </nav>
+        </div>
+        {/* Mobile quick nav */}
+        <div className="md:hidden flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide" style={{ borderTop: '1px solid #E8E0D6' }}>
+          {[
+            { label: 'Cómo funciona', href: '#como-funciona' },
+            { label: 'Precios', href: '#precios' },
+            { label: 'IA', href: '#ia' },
+            { label: 'Contacto', href: '#contacto' },
+          ].map((l) => (
+            <a key={l.label} href={l.href} className="shrink-0 rounded-full px-3 py-1 mt-2 text-xs font-medium transition-opacity hover:opacity-70" style={{ background: 'white', color: 'var(--stone)', border: '1px solid #E8E0D6' }}>
+              {l.label}
+            </a>
+          ))}
         </div>
       </header>
 
@@ -204,7 +213,8 @@ export default function LandingPage() {
             className="mb-4 text-center text-4xl font-light md:text-5xl"
             style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)' }}
           >
-            Todo en un solo lugar
+            Todo en{' '}
+            <em className="not-italic" style={{ color: 'var(--sage)' }}>un solo lugar</em>
           </h2>
           <p className="mx-auto mb-14 max-w-md text-center text-base" style={{ color: 'var(--stone)' }}>
             Flexa automatiza la gestión para que puedas enfocarte en lo que hacés bien: enseñar.
@@ -314,15 +324,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Strip social proof ── */}
-      <div className="py-8 px-5 text-center" style={{ background: 'var(--ink)' }}>
-        <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.7)' }}>
-          <span style={{ color: '#F59E0B' }}>✦</span>{' '}
-          Crecemos por recomendación, escuchando a cada estudio —{' '}
-          <em className="not-italic font-medium" style={{ color: 'white' }}>sus necesidades definen nuestras próximas funciones.</em>
-        </p>
-      </div>
-
       {/* ── Por qué Flexa / Comparación (oculto hasta tener data real) ── */}
 
       {/* ── Testimoniales (ocultos hasta tener resultados reales) ── */}
@@ -359,7 +360,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Soporte + Contacto ── */}
-      <section className="py-20" style={{ background: 'var(--cream)' }}>
+      <section id="contacto" className="py-20" style={{ background: 'var(--cream)' }}>
         <div className="mx-auto max-w-xl px-5 text-center">
           <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--sage)' }}>
             Siempre cerca

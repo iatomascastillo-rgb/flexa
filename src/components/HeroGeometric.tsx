@@ -235,7 +235,7 @@ export function HeroGeometric() {
       >
         {/* Phone: vista alumno */}
         <div className="w-52 shrink-0">
-          <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Vista alumno</p>
+          <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--sage)' }}>Vista alumno</p>
           <div
             className="overflow-hidden rounded-[1.8rem] p-1"
             style={{ background: '#2C2C2C', boxShadow: '0 16px 48px rgba(0,0,0,0.12)' }}
@@ -289,7 +289,7 @@ export function HeroGeometric() {
 
         {/* Card: vista admin */}
         <div className="w-72 shrink-0">
-          <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Vista admin</p>
+          <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: '#8B5CF6' }}>Vista admin</p>
           <div
             className="overflow-hidden rounded-2xl"
             style={{ background: 'white', border: '1px solid #E8E0D6', boxShadow: '0 16px 48px rgba(0,0,0,0.08)' }}

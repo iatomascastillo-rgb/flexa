@@ -37,10 +37,11 @@ export function PricingSection() {
           Precios
         </p>
         <h2
-          className="mb-4 text-center text-3xl font-light leading-tight md:text-5xl"
+          className="mb-4 text-center text-4xl font-light leading-tight md:text-5xl"
           style={{ fontFamily: 'var(--font-cormorant, serif)', color: 'var(--ink)', textWrap: 'balance' } as React.CSSProperties}
         >
-          Inversión inteligente para tu negocio
+          Inversión inteligente{' '}
+          <em className="not-italic" style={{ color: 'var(--sage)' }}>para tu negocio</em>
         </h2>
         <p className="mx-auto mb-8 max-w-sm text-center text-sm leading-relaxed md:max-w-md md:text-base" style={{ color: 'var(--stone)' }}>
           Automatizá tus reservas hoy. 30 días gratis sin compromiso, con beneficios exclusivos de lanzamiento.
@@ -81,7 +82,14 @@ export function PricingSection() {
 
           {/* ── Plan Básico ── */}
           <div className="rounded-2xl p-7" style={{ background: 'white', border: '1px solid #E8E0D6' }}>
-            <p className="mb-3 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Básico</p>
+            <div className="mb-3 space-y-2">
+              <p className="text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Básico</p>
+              {isAnnual && (
+                <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: '#F59E0B', color: '#1C1400' }}>
+                  OFERTA DE LANZAMIENTO
+                </span>
+              )}
+            </div>
 
             {isAnnual ? (
               <>

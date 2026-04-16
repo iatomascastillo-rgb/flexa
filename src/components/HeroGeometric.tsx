@@ -212,7 +212,7 @@ export function HeroGeometric() {
           <span>Unite como</span>
           <span
             className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-            style={{ background: 'rgba(92,122,94,0.25)', color: '#8FC892', border: '1px solid rgba(92,122,94,0.4)' }}
+            style={{ background: 'rgba(139,92,246,0.2)', color: '#8B5CF6', border: '1px solid rgba(139,92,246,0.35)', fontWeight: 700 }}
           >
             ✦ Miembro Fundador
           </span>
@@ -316,28 +316,40 @@ export function HeroGeometric() {
               ))}
             </div>
             <div className="px-4 py-3">
-              {/* Mini bar chart */}
-              <p className="mb-2 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Ocupación semanal</p>
-              <div className="flex items-end gap-1 h-10 mb-3">
-                {[
-                  { day: 'L', pct: 70 },
-                  { day: 'M', pct: 95 },
-                  { day: 'X', pct: 50 },
-                  { day: 'J', pct: 85 },
-                  { day: 'V', pct: 75 },
-                  { day: 'S', pct: 60 },
-                ].map((b) => (
-                  <div key={b.day} className="flex flex-1 flex-col items-center gap-0.5">
-                    <div
-                      className="w-full rounded-sm"
-                      style={{
-                        height: `${b.pct * 0.4}px`,
-                        background: b.pct >= 90 ? 'var(--sage)' : b.pct >= 70 ? 'rgba(92,122,94,0.45)' : 'rgba(92,122,94,0.2)',
-                      }}
-                    />
-                    <span className="text-[9px]" style={{ color: 'var(--stone)' }}>{b.day}</span>
-                  </div>
-                ))}
+              {/* Line chart — facturación mensual */}
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>Facturación mensual</p>
+                <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: '#DCFCE7', color: '#166534' }}>↑ +89%</span>
+              </div>
+              <div className="mb-1">
+                <svg viewBox="0 0 240 56" className="w-full" style={{ overflow: 'visible' }}>
+                  {/* Grid lines */}
+                  <line x1="0" y1="5" x2="240" y2="5" stroke="#E8E0D6" strokeWidth="0.5" />
+                  <line x1="0" y1="30" x2="240" y2="30" stroke="#E8E0D6" strokeWidth="0.5" />
+                  <line x1="0" y1="55" x2="240" y2="55" stroke="#E8E0D6" strokeWidth="0.5" />
+                  {/* Area fill */}
+                  <polygon
+                    points="0,55 48,47 96,39 144,43 192,22 240,5 240,55"
+                    fill="rgba(92,122,94,0.1)"
+                  />
+                  {/* Line */}
+                  <polyline
+                    points="0,55 48,47 96,39 144,43 192,22 240,5"
+                    fill="none"
+                    stroke="#5C7A5E"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* Last point dot */}
+                  <circle cx="240" cy="5" r="2.5" fill="#5C7A5E" />
+                  {/* Last value label */}
+                  <text x="232" y="2" fontSize="7" fill="#5C7A5E" textAnchor="end" fontWeight="600">$180k</text>
+                  {/* Month labels */}
+                  {['Ene','Feb','Mar','Abr','May','Jun'].map((m, i) => (
+                    <text key={m} x={i * 48} y="56" fontSize="7" fill="#8C7B6B" textAnchor="middle">{m}</text>
+                  ))}
+                </svg>
               </div>
               {/* IA alert */}
               <div className="rounded-xl p-3" style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.15)' }}>

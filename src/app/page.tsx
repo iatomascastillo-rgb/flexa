@@ -59,7 +59,7 @@ const AI_INSIGHTS = [
   {
     tag: 'Tu agenda',
     title: 'Qué ajustar para ganar más',
-    quote: 'El turno de miércoles 7:00 tiene un 28% de ocupación promedio. Moverlo a las 8:00 podría elevarla al 60%, basado en el patrón de reservas de los últimos 3 meses.',
+    quote: 'El turno del lunes a las 10:00 tiene solo 3 inscriptas. Correrlo a las 10:30 lo une con el grupo de las 11:00, reduce un turno vacío y no perdés ninguna alumna.',
   },
   {
     tag: 'Alumnas que se alejan',

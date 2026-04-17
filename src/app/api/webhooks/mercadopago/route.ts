@@ -217,8 +217,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       mpPaymentId: mpPaymentIdStr,
     })
   } catch (err) {
+    if (err instanceof Error && err.message === 'IDEMPOTENT') {
+      return NextResponse.json({ ok: true, idempotent: true })
+    }
     console.error('[webhook/mp] Error activating package:', err)
-    // Retornar 500 para que MP reintente
     return NextResponse.json({ error: 'Activation failed' }, { status: 500 })
   }
 
@@ -294,6 +296,17 @@ async function activatePackage({
     await tx.$queryRaw`
       SELECT id FROM user_packages WHERE id = ${userPackageId} FOR UPDATE
     `
+
+    // ── 0. Idempotencia DENTRO de la transacción ──────────────────────────
+    // Re-verificar después del lock para que dos webhooks simultáneos no
+    // pasen ambos el check externo y lleguen aquí al mismo tiempo.
+    const currentPkg = await tx.userPackage.findUnique({
+      where:  { id: userPackageId },
+      select: { paymentStatus: true, paymentId: true },
+    })
+    if (currentPkg?.paymentStatus === 'APPROVED' || currentPkg?.paymentId === mpPaymentId) {
+      throw new Error('IDEMPOTENT')
+    }
 
     // ── 1. Activar paquete ────────────────────────────────────────────────
     await tx.userPackage.update({

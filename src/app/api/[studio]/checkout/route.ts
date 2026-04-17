@@ -111,9 +111,12 @@ export async function POST(
   })
 
   // ── Construir URL base ─────────────────────────────────────────────────────
-  // APP_URL en producción (ej: "https://pilates.flexa.app")
-  // En desarrollo: si no hay APP_URL, usar localhost (sin notification_url para MP)
-  const appBaseUrl = (process.env.APP_URL ?? `http://${req.headers.get('host')}`).replace(/\/$/, '')
+  // APP_URL es obligatorio en producción para evitar Host Header Injection.
+  if (!process.env.APP_URL && process.env.NODE_ENV === 'production') {
+    console.error('[checkout] APP_URL no configurado en producción')
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
+  const appBaseUrl = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
   const isLocalhost = appBaseUrl.includes('localhost') || appBaseUrl.includes('127.0.0.1')
 
   // ── Crear preferencia en MercadoPago ──────────────────────────────────────

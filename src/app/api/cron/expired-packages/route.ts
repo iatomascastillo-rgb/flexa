@@ -12,7 +12,7 @@ import { sendEmail } from '@/lib/email'
 // Idempotente: usa PlatformEvent con type='EXPIRED_PKG_ALERT' y data.date=YYYY-MM-DD.
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

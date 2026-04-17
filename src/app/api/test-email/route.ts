@@ -9,7 +9,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Not available in production' }, { status: 403 })
   }
 
-  const to = req.nextUrl.searchParams.get('to') ?? 'iatomascastillo@gmail.com'
+  const to = req.nextUrl.searchParams.get('to')
+  if (!to) return NextResponse.json({ error: 'Falta parámetro ?to=' }, { status: 400 })
 
   const result = await sendEmail(to, 'test', {})
 

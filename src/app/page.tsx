@@ -55,7 +55,7 @@ const AI_INSIGHTS = [
   {
     tag: 'Alumnas que se alejan',
     title: 'Quién está perdiendo el ritmo',
-    quote: '3 alumnas no reservaron en 2 semanas y 2 faltaron a sus últimas 3 clases sin cancelar. Todas tienen créditos activos. Un mensaje hoy puede recuperar al menos la mitad.',
+    quote: 'Carla F. lleva 16 días sin reservar y tiene 4 créditos activos. Paula M. faltó 3 veces seguidas sin avisar. Ambas venían 2 veces por semana. Un mensaje hoy tiene alta probabilidad de recuperarlas — después de los 20 días el patrón de abandono se consolida.',
   },
   {
     tag: 'Asistencia',
@@ -287,7 +287,7 @@ export default function LandingPage() {
       </div>
 
       {/* ── Personalización ── */}
-      <section className="py-20" style={{ background: 'var(--cream)' }}>
+      <section className="pt-20 pb-10" style={{ background: 'var(--cream)' }}>
         <div className="mx-auto max-w-5xl px-5">
           <div className="md:flex md:items-start md:gap-16">
             <div className="mb-12 md:mb-0 md:w-2/5">

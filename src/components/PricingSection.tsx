@@ -31,7 +31,7 @@ export function PricingSection() {
   const [isAnnual, setIsAnnual] = useState(true)
 
   return (
-    <section id="precios" className="py-20" style={{ background: 'var(--cream)' }}>
+    <section id="precios" className="pt-10 pb-20" style={{ background: 'var(--cream)' }}>
       <div className="mx-auto max-w-5xl px-5">
         <p className="mb-2 text-center text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--sage)' }}>
           Precios

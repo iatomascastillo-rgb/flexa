@@ -16,14 +16,5 @@ export async function GET(req: NextRequest) {
 
   const result = await sendEmail(to, 'test', {})
 
-  return NextResponse.json({
-    ...result,
-    sentTo: to,
-    from: process.env.EMAIL_FROM ?? 'onboarding@resend.dev',
-    env: {
-      HAS_RESEND_KEY: !!process.env.RESEND_API_KEY,
-      EMAIL_FROM: process.env.EMAIL_FROM,
-      NEXTAUTH_URL: process.env.NEXTAUTH_URL,
-    },
-  })
+  return NextResponse.json({ ...result, sentTo: to })
 }

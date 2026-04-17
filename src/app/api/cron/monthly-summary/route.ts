@@ -35,7 +35,7 @@ function lastMonthRange(): { start: Date; end: Date; label: string } {
 //   - Clases, reservas, gracia
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

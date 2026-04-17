@@ -141,7 +141,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const { studioId, studio } = verified
-  const appUrl      = (process.env.APP_URL ?? `https://${req.headers.get('host')}`).replace(/\/$/, '')
+  const appUrl      = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
   const redirectUri = `${appUrl}/api/mp-oauth/callback`
 
   // ── 3. Intercambiar code por token ────────────────────────────────────────

@@ -105,6 +105,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Si MP_WEBHOOK_SECRET está configurado, rechazar solicitudes sin firma válida.
   // En desarrollo sin secret configurado se omite (para pruebas con ngrok).
   const webhookSecret = process.env.MP_WEBHOOK_SECRET
+  if (!webhookSecret && process.env.NODE_ENV === 'production') {
+    console.error('[webhook/mp] MP_WEBHOOK_SECRET no configurado en producción')
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
   if (webhookSecret) {
     const isValid = verifyMpSignature(
       req.headers.get('x-signature'),

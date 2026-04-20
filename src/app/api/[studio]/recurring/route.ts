@@ -77,8 +77,8 @@ export async function POST(
     return NextResponse.json({ error: 'time debe tener formato HH:mm' }, { status: 400 })
   }
 
-  // Verificar classType y duplicado en paralelo
-  const [classType, existing] = await Promise.all([
+  // Verificar classType, duplicado y existencia del slot en templates — todo en paralelo
+  const [classType, existing, templateForSlot, totalTemplates] = await Promise.all([
     prisma.classType.findUnique({
       where: { id: classTypeId },
       select: { studioId: true, active: true },
@@ -94,6 +94,14 @@ export async function POST(
       },
       select: { id: true },
     }),
+    prisma.classScheduleTemplate.findFirst({
+      where: { studioId: tenant.studioId, classTypeId, dayOfWeek: dayOfWeek as DayOfWeek, time, active: true },
+      select: { id: true },
+    }),
+    // Contar templates para ESTE tipo de clase específico (no del estudio entero)
+    prisma.classScheduleTemplate.count({
+      where: { studioId: tenant.studioId, classTypeId, active: true },
+    }),
   ])
 
   if (!classType || classType.studioId !== tenant.studioId || !classType.active) {
@@ -102,6 +110,11 @@ export async function POST(
 
   if (existing) {
     return NextResponse.json({ error: 'Ya tenés una recurrencia para ese día y horario' }, { status: 409 })
+  }
+
+  // Validar contra templates solo si este tipo de clase tiene templates configurados
+  if (totalTemplates > 0 && !templateForSlot) {
+    return NextResponse.json({ error: 'Ese horario no existe en la agenda del estudio' }, { status: 422 })
   }
 
   const schedule = await prisma.recurringSchedule.create({

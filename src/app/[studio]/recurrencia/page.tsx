@@ -32,7 +32,7 @@ export default async function RecurrenciaPage({
   const nextYear = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear()
   const startOfMonthAfterNext = new Date(Date.UTC(nextYear, nextMonth + 1, 1))
 
-  const [schedules, classTypes, sessionSlots] = await Promise.all([
+  const [schedules, classTypes, templates, sessionSlots] = await Promise.all([
     // Schedules activos del usuario
     prisma.recurringSchedule.findMany({
       where: { studioId: tenant.studioId, userId: session.user.id, active: true },
@@ -41,18 +41,33 @@ export default async function RecurrenciaPage({
     }),
     // Tipos de clase disponibles
     getActiveClassTypes(tenant.studioId),
-    // Horarios reales: mes actual + próximo mes como fallback si el cron no corrió aún
-    // Sin distinct para evitar problemas con Prisma+Postgres — el cliente deduplica con Set
+    // Templates: fuente de verdad del horario permanente del estudio
+    prisma.classScheduleTemplate.findMany({
+      where: { studioId: tenant.studioId, active: true },
+      select: { classTypeId: true, dayOfWeek: true, time: true },
+    }),
+    // Sesiones reales: fallback si el estudio aún no tiene templates configurados
     prisma.classSession.findMany({
       where: {
         studioId: tenant.studioId,
         cancelledAt: null,
         date: { gte: today, lt: startOfMonthAfterNext },
       },
-      select: { classTypeId: true, time: true },
+      select: { classTypeId: true, time: true, date: true },
       orderBy: { time: 'asc' },
     }),
   ])
+
+  // Por tipo de clase: si tiene templates → usar templates; si no → derivar de sesiones reales
+  const DOW_ENUM = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'] as const
+  const templateClassTypeIds = new Set(templates.map((t) => t.classTypeId))
+  const sessionDerived = sessionSlots
+    .filter((s) => !templateClassTypeIds.has(s.classTypeId))
+    .map((s) => ({ classTypeId: s.classTypeId, dayOfWeek: DOW_ENUM[s.date.getUTCDay()], time: s.time }))
+    .filter((slot, i, arr) =>
+      arr.findIndex((x) => x.classTypeId === slot.classTypeId && x.dayOfWeek === slot.dayOfWeek && x.time === slot.time) === i,
+    )
+  const availableSlots = [...templates, ...sessionDerived]
 
   return (
     <div className="mx-auto max-w-md px-4 pt-8 pb-24">
@@ -109,7 +124,7 @@ export default async function RecurrenciaPage({
         studio={studio}
         schedules={schedules}
         classTypes={classTypes}
-        availableSlots={sessionSlots}
+        availableSlots={availableSlots}
       />
     </div>
   )

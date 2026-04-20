@@ -13,6 +13,7 @@ interface ClassType {
 
 interface AvailableSlot {
   classTypeId: string
+  dayOfWeek: string
   time: string
 }
 
@@ -58,15 +59,20 @@ export default function RecurringManager({ studio, schedules: initial, classType
 
   // Form state
   const [selectedClassType, setSelectedClassType] = useState(classTypes[0]?.id ?? '')
-  const [selectedDay, setSelectedDay] = useState<DayOfWeek>('MONDAY')
+  const [selectedDay, setSelectedDay] = useState<DayOfWeek | ''>('')
   const [selectedTime, setSelectedTime] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Times filtered by selected class type
+  // Days available for selected class type (preserving week order)
+  const availableDays = ALL_DAYS.filter((d) =>
+    availableSlots.some((s) => s.classTypeId === selectedClassType && s.dayOfWeek === d),
+  )
+
+  // Times filtered by selected class type AND selected day
   const availableTimes = [
     ...new Set(
       availableSlots
-        .filter((s) => s.classTypeId === selectedClassType)
+        .filter((s) => s.classTypeId === selectedClassType && s.dayOfWeek === selectedDay)
         .map((s) => s.time)
         .sort(),
     ),
@@ -74,7 +80,7 @@ export default function RecurringManager({ studio, schedules: initial, classType
 
   // Handlers
   async function handleAdd() {
-    if (!selectedClassType || !selectedDay || !selectedTime) {
+    if (!selectedClassType || !selectedDay || !selectedTime || selectedDay === '') {
       setError('Completá todos los campos')
       return
     }
@@ -249,7 +255,9 @@ export default function RecurringManager({ studio, schedules: initial, classType
               <select
                 value={selectedClassType}
                 onChange={(e) => {
-                  setSelectedClassType(e.target.value)
+                  const ct = e.target.value
+                  setSelectedClassType(ct)
+                  setSelectedDay('')
                   setSelectedTime('')
                 }}
                 className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
@@ -268,18 +276,28 @@ export default function RecurringManager({ studio, schedules: initial, classType
               <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--stone)' }}>
                 Día
               </label>
-              <select
-                value={selectedDay}
-                onChange={(e) => setSelectedDay(e.target.value as DayOfWeek)}
-                className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
-                style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
-              >
-                {ALL_DAYS.map((d) => (
-                  <option key={d} value={d}>
-                    {DAY_LABELS[d]}
-                  </option>
-                ))}
-              </select>
+              {availableDays.length > 0 ? (
+                <select
+                  value={selectedDay}
+                  onChange={(e) => {
+                    setSelectedDay(e.target.value as DayOfWeek)
+                    setSelectedTime('')
+                  }}
+                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}
+                >
+                  <option value="">Elegí un día</option>
+                  {availableDays.map((d) => (
+                    <option key={d} value={d}>
+                      {DAY_LABELS[d]}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                  No hay días disponibles para este tipo de clase.
+                </p>
+              )}
             </div>
 
             {/* Horario */}
@@ -312,7 +330,7 @@ export default function RecurringManager({ studio, schedules: initial, classType
           <div className="mt-4 flex gap-2">
             <button
               onClick={handleAdd}
-              disabled={isSubmitting || !selectedTime}
+              disabled={isSubmitting || !selectedDay || !selectedTime}
               className="flex-1 rounded-xl py-2 text-sm font-medium transition-opacity disabled:opacity-40"
               style={{ background: 'var(--sage)', color: 'white' }}
             >

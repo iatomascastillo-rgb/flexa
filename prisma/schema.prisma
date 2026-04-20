@@ -132,6 +132,7 @@ model Studio {
   aiInsights              AiInsight[]
   holidays                StudioHoliday[]
   news                    StudioNews[]
+  fixedCosts              StudioFixedCosts[]
 
   @@map("studios")
 }
@@ -633,6 +634,28 @@ model StudioNews {
 
   @@index([studioId, publishedAt])
   @@map("studio_news")
+}
+
+/// Costos fijos mensuales del estudio. Input manual del admin una vez por mes.
+/// Requerido para calcular break-even y margen por clase en el dashboard financiero.
+model StudioFixedCosts {
+  id         String   @id @default(cuid())
+  studioId   String
+  studio     Studio   @relation(fields: [studioId], references: [id])
+
+  month      Int      // 1–12
+  year       Int
+  rentCost   Int      @default(0)  // centavos ARS — alquiler
+  staffCost  Int      @default(0)  // centavos ARS — instructores / personal
+  otherCosts Int      @default(0)  // centavos ARS — otros costos fijos
+  notes      String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([studioId, month, year])
+  @@index([studioId, year, month])
+  @@map("studio_fixed_costs")
 }
 
 // -- MIGRATION: ALTER TABLE user_packages ADD CONSTRAINT classes_remaining_non_negative CHECK (classes_remaining >= 0);

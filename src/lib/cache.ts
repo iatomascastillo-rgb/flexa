@@ -1,5 +1,6 @@
 import { unstable_cache } from 'next/cache'
 import { prisma } from './prisma'
+import { getFinancialDashboard } from '@/services/financial.service'
 
 /**
  * Tipos de clase activos del estudio — cambian raramente, cache de 1h.
@@ -254,5 +255,21 @@ export function getMonthlyAdminMetrics(
     },
     [`admin-metrics-${studioId}-${monthKey}`],
     { revalidate: 3600, tags: [`admin-metrics-${studioId}`] },
+  )()
+}
+
+/**
+ * Dashboard financiero — cache de 1 hora.
+ * Incluye datos sensibles (nombres de alumnos en riesgo) — solo consumir desde endpoints autenticados.
+ * Invalidar con: revalidateTag(`financial-${studioId}`)
+ * Se invalida automáticamente al guardar costos fijos via POST /api/[studio]/financial/costs.
+ */
+export function getFinancialDashboardCached(studioId: string) {
+  const now = new Date()
+  const monthKey = `${now.getUTCFullYear()}-${now.getUTCMonth()}`
+  return unstable_cache(
+    () => getFinancialDashboard(studioId),
+    [`financial-${studioId}-${monthKey}`],
+    { revalidate: 3600, tags: [`financial-${studioId}`] },
   )()
 }

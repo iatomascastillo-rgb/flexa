@@ -7,6 +7,7 @@ import { getMonthlyAdminMetrics } from '@/lib/cache'
 import { InsightCard } from '@/components/InsightCard'
 import { fmtTime, fmtARS, todayARStart } from '@/lib/formatters'
 import AdminOnboardingGuide from '../_components/AdminOnboardingGuide'
+import { FinancialTab } from '../_components/FinancialTab'
 
 const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
@@ -20,7 +21,7 @@ export default async function AdminDashboardPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const [{ studio }, sp] = await Promise.all([params, searchParams])
-  const tab = sp.tab === 'mensual' ? 'mensual' : sp.tab === 'ia' ? 'ia' : 'dia'
+  const tab = sp.tab === 'mensual' ? 'mensual' : sp.tab === 'ia' ? 'ia' : sp.tab === 'financiero' ? 'financiero' : 'dia'
 
   const session = await auth()
   if (!session?.user?.id) redirect(`/${studio}/login?callbackUrl=/${studio}/admin`)
@@ -281,6 +282,13 @@ export default async function AdminDashboardPage({
           style={tab === 'ia' ? activeTab : inactiveTab}
         >
           IA
+        </Link>
+        <Link
+          href={`/${studio}/admin?tab=financiero`}
+          className="pb-2 text-sm transition-colors"
+          style={tab === 'financiero' ? activeTab : inactiveTab}
+        >
+          Financiero
         </Link>
       </div>
 
@@ -1040,6 +1048,13 @@ export default async function AdminDashboardPage({
             </section>
           )}
         </>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          TAB: FINANCIERO
+      ══════════════════════════════════════════════════════════════════════ */}
+      {tab === 'financiero' && (
+        <FinancialTab studio={studio} />
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════

@@ -111,6 +111,10 @@ const FAQS = [
     a: 'Flexa analiza los datos de tu estudio (reservas, pagos, asistencia) con inteligencia artificial y te genera diagnósticos en palabras simples: qué funciona, qué alumnas están por irse y qué ajustes podés hacer. El plan Pro usa Claude Sonnet, el modelo más avanzado de Anthropic, para análisis más ricos y detallados. El plan Básico incluye una versión de prueba del análisis de IA.',
   },
   {
+    q: '¿Qué incluye el panel financiero?',
+    a: 'El panel financiero (Plan Pro) muestra seis métricas calculadas automáticamente: cuánta plata ya cobraste por paquetes activos, qué alumnas están en riesgo de irse y cuánto representan, si ganaste o perdiste en el mes (comparando ingresos vs. costos fijos), cuánto vale cada alumna en promedio, una proyección de lo que vas a cobrar en los próximos 3 meses, y qué te deja cada tipo de clase. Para las métricas de costos necesitás cargar el alquiler, instructores y gastos fijos del mes — lo hacés desde el mismo panel en un par de pasos.',
+  },
+  {
     q: '¿Puedo migrar desde mi planilla o sistema actual?',
     a: 'Sí. Podés cargar tus alumnas y paquetes existentes desde el panel de admin. El equipo de Flexa te acompaña en la migración inicial sin costo adicional.',
   },
@@ -154,6 +158,9 @@ export default function LandingPage() {
             <a href="#ia" className="hidden md:inline-block rounded-xl px-3 py-2 text-sm font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--stone)' }}>
               IA
             </a>
+            <a href="#financiero" className="hidden md:inline-block rounded-xl px-3 py-2 text-sm font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--stone)' }}>
+              Finanzas
+            </a>
             {/* Separador */}
             <span className="hidden md:block mx-2 h-4 w-px" style={{ background: '#D1C9C0' }} />
             <Link href="/login" className="rounded-xl px-4 py-2 text-sm font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--stone)' }}>
@@ -170,6 +177,7 @@ export default function LandingPage() {
             { label: 'Cómo funciona', href: '#como-funciona' },
             { label: 'Precios', href: '#precios' },
             { label: 'IA', href: '#ia' },
+            { label: 'Finanzas', href: '#financiero' },
             { label: 'Contacto', href: '#contacto' },
           ].map((l) => (
             <a key={l.label} href={l.href} className="shrink-0 rounded-full px-3 py-1 mt-2 text-xs font-medium transition-opacity hover:opacity-70" style={{ background: 'white', color: 'var(--stone)', border: '1px solid #E8E0D6' }}>
@@ -285,6 +293,135 @@ export default function LandingPage() {
         </div>
       </BeamsBackground>
       </div>
+
+      {/* ── Dashboard Financiero ── */}
+      <section id="financiero" className="py-24" style={{ background: '#0D1A12' }}>
+        <div className="mx-auto max-w-5xl px-5">
+          <div className="mb-14 text-center">
+            <div className="mb-4 flex items-center justify-center gap-3">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest"
+                style={{ background: 'rgba(74,169,106,0.18)', color: '#4AA96A', border: '1px solid rgba(74,169,106,0.3)' }}
+              >
+                💰 Dashboard Financiero · Plan Pro
+              </span>
+            </div>
+            <h2
+              className="mb-4 text-3xl font-light text-white sm:text-4xl md:text-5xl"
+              style={{ fontFamily: 'var(--font-cormorant, serif)' }}
+            >
+              No solo ves lo que pasó.
+              <br />
+              <em className="not-italic font-semibold" style={{ color: '#4AA96A' }}>
+                Sabés lo que viene.
+              </em>
+            </h2>
+            <p className="mx-auto max-w-lg text-base" style={{ color: 'rgba(255,255,255,0.55)' }}>
+              Flexa calcula automáticamente cuánto dinero ya tenés comprometido, qué alumnas están en
+              riesgo de irse, y cuánto vas a cobrar el mes que viene — sin planillas ni cuentas manuales.
+            </p>
+          </div>
+
+          {/* Cards de preview con datos de ejemplo */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div
+              className="rounded-2xl px-5 py-5"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}
+            >
+              <p className="mb-1 text-xs font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                💰 Plata ya cobrada
+              </p>
+              <p className="mb-0.5 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                Clases pagas, aún no dadas
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-white">$148.500</p>
+              <p className="mt-1 text-xs" style={{ color: '#4AA96A' }}>+12% vs mes anterior</p>
+              <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                23 paquetes · 4 clases promedio
+              </p>
+            </div>
+
+            <div
+              className="rounded-2xl px-5 py-5"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}
+            >
+              <p className="mb-1 text-xs font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                ⚠️ Podés perder
+              </p>
+              <p className="mb-0.5 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                Alumnas que se están yendo
+              </p>
+              <p className="mt-2 text-2xl font-semibold" style={{ color: '#d97706' }}>$32.000</p>
+              <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>4 alumnas en riesgo</p>
+              <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                Carla F., Paula M. +2 más
+              </p>
+            </div>
+
+            <div
+              className="rounded-2xl px-5 py-5"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}
+            >
+              <p className="mb-1 text-xs font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                🔮 Próximo mes
+              </p>
+              <p className="mb-0.5 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                Proyección de cobros
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-white">$126.000</p>
+              <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>proyectado</p>
+              <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                Basado en 72% de renovación
+              </p>
+            </div>
+          </div>
+
+          {/* Más métricas en fila secundaria */}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div
+              className="rounded-2xl px-5 py-4"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <p className="mb-2 text-xs font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                📊 Resultado del mes — con costos cargados
+              </p>
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>Ingresaste $95.000 · Gastaste $68.000</p>
+                  <p className="mt-1 text-lg font-semibold" style={{ color: '#4AA96A' }}>Ganaste $27.000</p>
+                </div>
+                <p className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                  Necesitabas 34 clases para cubrir costos
+                </p>
+              </div>
+            </div>
+            <div
+              className="rounded-2xl px-5 py-4"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <p className="mb-2 text-xs font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                📋 Qué te deja cada tipo de clase
+              </p>
+              <div className="space-y-1">
+                {[
+                  { name: 'Reformer', margin: '+$3.200' },
+                  { name: 'Mat grupal', margin: '+$1.800' },
+                  { name: 'Duet', margin: '+$4.100' },
+                ].map((c) => (
+                  <div key={c.name} className="flex items-center justify-between">
+                    <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>{c.name}</p>
+                    <p className="text-xs font-medium" style={{ color: '#4AA96A' }}>{c.margin}/clase</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <p className="mt-10 text-center text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>
+            Datos calculados automáticamente cada hora · Disponible en Plan Pro
+          </p>
+        </div>
+      </section>
 
       {/* ── Personalización ── */}
       <section className="pt-20 pb-10" style={{ background: 'var(--cream)' }}>
@@ -425,6 +562,7 @@ export default function LandingPage() {
               {[
                 { label: 'Cómo funciona', href: '#como-funciona' },
                 { label: 'Precios', href: '#precios' },
+                { label: 'IA', href: '#ia' },
                 { label: 'Privacidad', href: '#' },
                 { label: 'Términos', href: '#' },
                 { label: 'Contacto', href: 'https://wa.me/5491156972644?text=Hola%2C%20estoy%20interesado%20en%20Flexa!' },

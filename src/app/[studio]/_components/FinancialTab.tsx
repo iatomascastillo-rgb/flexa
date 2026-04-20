@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import type { FinancialDashboard } from '@/services/financial.service'
+import type { FinancialDashboard, UpgradeCandidate, SlowConsumer } from '@/services/financial.service'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -101,6 +101,11 @@ function TutorialSection() {
       icon: '🔮',
       title: '¿Cuánto vas a cobrar?',
       body: 'Proyección de los próximos 3 meses basada en la tasa de renovación histórica de tu estudio. Es una estimación — no incluye alumnas nuevas ni promociones.',
+    },
+    {
+      icon: '📦',
+      title: 'Paquetes y alumnas',
+      body: 'Qué paquetes están activos, cuántas alumnas tiene cada uno y cuánto genera. También muestra quién está lista para pasar a un paquete mayor, y quién tiene clases sin usar que van a vencer pronto.',
     },
     {
       icon: '📋',
@@ -444,7 +449,7 @@ export function FinancialTab({ studio }: FinancialTabProps) {
     )
   }
 
-  const { breakEven, committedRevenue, revenueAtRisk, classMargin, ltv, cashFlow } = data
+  const { breakEven, committedRevenue, revenueAtRisk, classMargin, ltv, cashFlow, packageAnalysis } = data
   const costsEntered = breakEven.costsEntered
 
   const maxCashFlow = Math.max(
@@ -692,6 +697,186 @@ export function FinancialTab({ studio }: FinancialTabProps) {
           Proyectado según el {ltv.renewalRate}% de renovación histórico del estudio. No incluye alumnas nuevas.
         </p>
       </Card>
+
+      {/* ── Paquetes y alumnas ── */}
+      {packageAnalysis.mix.length > 0 && (
+        <>
+          <SectionLabel>Paquetes</SectionLabel>
+
+          {/* Mix de paquetes */}
+          <Card className="mb-3">
+            <p className="mb-3 text-xs font-medium" style={{ color: 'var(--stone)' }}>
+              📦 Distribución de paquetes activos
+              {packageAnalysis.totalActiveStudents > 0 && (
+                <span style={{ opacity: 0.7 }}> · {packageAnalysis.totalActiveStudents} alumnas</span>
+              )}
+            </p>
+            <div className="space-y-2">
+              {packageAnalysis.mix.map((item) => (
+                <div key={item.classCount}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
+                        {item.classCount} clases
+                      </span>
+                      {item.classCount === packageAnalysis.starProduct && (
+                        <span
+                          className="rounded px-1.5 py-0.5 text-xs"
+                          style={{ background: '#FEF3C7', color: '#92400E' }}
+                        >
+                          ★ más vendido
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                        {item.studentsCount} alumnas
+                      </span>
+                      <span className="ml-1.5 text-xs" style={{ color: 'var(--stone)' }}>
+                        {item.pct}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full" style={{ background: '#F0EDE8' }}>
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${item.pct}%`, background: 'var(--sage)' }}
+                    />
+                  </div>
+                  <div className="mt-0.5 flex justify-between">
+                    <span className="text-xs" style={{ color: 'var(--stone)' }}>
+                      {fmtARS(item.avgPrice)} promedio
+                    </span>
+                    {item.monthlyRevenue > 0 && (
+                      <span className="text-xs" style={{ color: 'var(--stone)' }}>
+                        {fmtARS(item.monthlyRevenue)} este mes
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Candidatas a upgrade */}
+          {packageAnalysis.upgradeCandidates.length > 0 && (
+            <div className="mb-3">
+              <details className="group">
+                <summary
+                  className="cursor-pointer list-none rounded-xl px-4 py-2.5 text-xs font-medium"
+                  style={{ background: '#F0F9F4', border: '1px solid #BBF7D0', color: 'var(--sage)' }}
+                >
+                  <span className="flex items-center justify-between">
+                    <span>↑ Alumnas listas para un paquete mayor ({packageAnalysis.upgradeCandidates.length})</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"/></svg>
+                  </span>
+                </summary>
+                <div className="mt-2 space-y-2">
+                  <p className="px-1 text-xs" style={{ color: 'var(--stone)' }}>
+                    Compraron el mismo paquete 2 o más veces. Son tus mejores candidatas para ofrecerles el siguiente nivel.
+                  </p>
+                  {packageAnalysis.upgradeCandidates.map((c: UpgradeCandidate) => (
+                    <div
+                      key={c.userId}
+                      className="rounded-2xl px-4 py-3"
+                      style={{ background: 'white', border: '1px solid #E8E0D6' }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm font-medium" style={{ color: 'var(--ink)' }}>
+                            {c.name}
+                          </p>
+                          <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                            Renovó el paquete de {c.currentClassCount} clases{' '}
+                            <strong>{c.renewalCount} veces</strong>
+                            {c.avgDaysToConsume && (
+                              <> · lo termina en ~{c.avgDaysToConsume} días</>
+                            )}
+                          </p>
+                        </div>
+                        <div
+                          className="shrink-0 rounded-xl px-2.5 py-1 text-xs font-medium"
+                          style={{ background: '#F0F9F4', color: 'var(--sage)' }}
+                        >
+                          {c.currentClassCount} → {c.suggestedClassCount}
+                        </div>
+                      </div>
+                      {c.pricePerClassNext !== null && (
+                        <div
+                          className="mt-2 rounded-xl px-3 py-2"
+                          style={{ background: '#F7F3EE' }}
+                        >
+                          <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                            💡 Si pasa al paquete de {c.suggestedClassCount} clases,
+                            paga{' '}
+                            <strong style={{ color: 'var(--ink)' }}>
+                              {fmtARS(c.pricePerClassNext)}/clase
+                            </strong>
+                            {c.pricePerClassNext < c.pricePerClassNow ? (
+                              <> en vez de {fmtARS(c.pricePerClassNow)}/clase —{' '}
+                                <span style={{ color: 'var(--sage)' }}>
+                                  ahorra {fmtARS(c.pricePerClassNow - c.pricePerClassNext)} por clase
+                                </span>
+                              </>
+                            ) : (
+                              <> — le sale un poco más pero tiene más clases disponibles</>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
+
+          {/* Alumnas que no van a terminar el paquete */}
+          {packageAnalysis.slowConsumers.length > 0 && (
+            <div className="mb-5">
+              <details className="group">
+                <summary
+                  className="cursor-pointer list-none rounded-xl px-4 py-2.5 text-xs font-medium"
+                  style={{ background: '#FEF9C3', border: '1px solid #FDE047', color: '#854D0E' }}
+                >
+                  <span className="flex items-center justify-between">
+                    <span>⏳ Alumnas que no van a terminar el paquete ({packageAnalysis.slowConsumers.length})</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"/></svg>
+                  </span>
+                </summary>
+                <div className="mt-2 space-y-2">
+                  <p className="px-1 text-xs" style={{ color: 'var(--stone)' }}>
+                    Tienen más del 35% de clases sin usar y el paquete vence en menos de 20 días. Un mensaje a tiempo puede salvarles las clases — y tu relación con ellas.
+                  </p>
+                  {packageAnalysis.slowConsumers.map((s: SlowConsumer) => (
+                    <div
+                      key={s.userId}
+                      className="flex items-center justify-between rounded-2xl px-4 py-3"
+                      style={{ background: 'white', border: '1px solid #E8E0D6' }}
+                    >
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{s.name}</p>
+                        <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                          Le quedan {s.classesRemaining} de {s.classesTotal} clases
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className="text-sm font-semibold"
+                          style={{ color: s.daysUntilExpiry <= 7 ? '#dc2626' : '#d97706' }}
+                        >
+                          {s.daysUntilExpiry}d
+                        </p>
+                        <p className="text-xs" style={{ color: 'var(--stone)' }}>para vencer</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
+        </>
+      )}
 
       {/* ── Qué te deja cada clase ── */}
       <SectionLabel>Qué te deja cada tipo de clase</SectionLabel>

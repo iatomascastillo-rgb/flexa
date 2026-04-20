@@ -69,6 +69,44 @@ export interface CashFlowProjectionResult {
   }
 }
 
+// ─── Bloque 7: Análisis de paquetes ──────────────────────────────────────────
+
+export interface PackageMixItem {
+  classCount: number
+  studentsCount: number      // alumnos activos con este paquete
+  pct: number                // % del total de alumnos activos
+  monthlyRevenue: number     // revenue de activaciones este mes (ARS)
+  avgPrice: number           // precio promedio del paquete (ARS)
+}
+
+export interface UpgradeCandidate {
+  userId: string
+  name: string
+  currentClassCount: number
+  suggestedClassCount: number
+  renewalCount: number               // veces que compró este tipo
+  avgDaysToConsume: number | null    // días promedio que tarda en consumir el paquete
+  pricePerClassNow: number           // ARS por clase en su paquete actual
+  pricePerClassNext: number | null   // ARS por clase en el paquete sugerido
+}
+
+export interface SlowConsumer {
+  userId: string
+  name: string
+  classCount: number
+  classesRemaining: number
+  classesTotal: number
+  daysUntilExpiry: number
+}
+
+export interface PackageAnalysisResult {
+  mix: PackageMixItem[]
+  totalActiveStudents: number
+  starProduct: number | null      // classCount que genera más revenue este mes
+  upgradeCandidates: UpgradeCandidate[]
+  slowConsumers: SlowConsumer[]
+}
+
 export interface FinancialDashboard {
   breakEven: BreakEvenResult
   committedRevenue: CommittedRevenueResult
@@ -76,6 +114,7 @@ export interface FinancialDashboard {
   classMargin: ClassMarginResult
   ltv: LTVResult
   cashFlow: CashFlowProjectionResult
+  packageAnalysis: PackageAnalysisResult
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -612,6 +651,178 @@ export async function getCashFlowProjection(studioId: string): Promise<CashFlowP
   }
 }
 
+// ─── Bloque 7: Análisis de paquetes ──────────────────────────────────────────
+
+export async function getPackageAnalysis(studioId: string): Promise<PackageAnalysisResult> {
+  const now = new Date()
+  const ar = nowAR()
+  const monthStart = new Date(Date.UTC(ar.getFullYear(), ar.getMonth(), 1))
+  const monthEnd   = new Date(Date.UTC(ar.getFullYear(), ar.getMonth() + 1, 1))
+
+  // Todos los paquetes aprobados del estudio (historial + activos)
+  const [allPurchases, availablePackages] = await Promise.all([
+    prisma.userPackage.findMany({
+      where: {
+        studioId,
+        paymentStatus: 'APPROVED',
+        packageId: { not: null },
+        isRecovery: false,
+        isTrial: false,
+      },
+      select: {
+        userId: true,
+        user: { select: { name: true } },
+        activatedAt: true,
+        expiresAt: true,
+        classesTotal: true,
+        classesRemaining: true,
+        package: { select: { price: true, classCount: true } },
+      },
+      orderBy: { activatedAt: 'asc' },
+    }),
+    // Paquetes disponibles en el estudio (para sugerir upgrade)
+    prisma.package.findMany({
+      where: { studioId, active: true },
+      select: { classCount: true, price: true },
+      orderBy: { classCount: 'asc' },
+    }),
+  ])
+
+  // ── Mix: paquetes activos (no vencidos, con créditos) ──────────────────────
+  const activePurchases = allPurchases.filter(
+    (p) => p.expiresAt && p.expiresAt >= now && p.classesRemaining > 0,
+  )
+
+  const mixMap = new Map<number, { students: Set<string>; revenue: number; prices: number[] }>()
+  for (const p of activePurchases) {
+    const cc = p.package?.classCount
+    if (!cc) continue
+    if (!mixMap.has(cc)) mixMap.set(cc, { students: new Set(), revenue: 0, prices: [] })
+    mixMap.get(cc)!.students.add(p.userId)
+    mixMap.get(cc)!.prices.push((p.package?.price ?? 0) / 100)
+  }
+
+  // Revenue de activaciones del mes actual (para starProduct)
+  const thisMonthPurchases = allPurchases.filter(
+    (p) => p.activatedAt && p.activatedAt >= monthStart && p.activatedAt < monthEnd,
+  )
+  const monthlyRevByCount = new Map<number, number>()
+  for (const p of thisMonthPurchases) {
+    const cc = p.package?.classCount
+    if (!cc) continue
+    monthlyRevByCount.set(cc, (monthlyRevByCount.get(cc) ?? 0) + (p.package?.price ?? 0) / 100)
+  }
+
+  const totalActiveStudents = new Set(activePurchases.map((p) => p.userId)).size
+
+  const mix: PackageMixItem[] = [...mixMap.entries()]
+    .map(([classCount, data]) => ({
+      classCount,
+      studentsCount: data.students.size,
+      pct: totalActiveStudents > 0 ? Math.round((data.students.size / totalActiveStudents) * 100) : 0,
+      monthlyRevenue: Math.round(monthlyRevByCount.get(classCount) ?? 0),
+      avgPrice: data.prices.length > 0
+        ? Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length)
+        : 0,
+    }))
+    .sort((a, b) => a.classCount - b.classCount)
+
+  const starProduct = mix.length > 0
+    ? mix.reduce((best, item) => item.monthlyRevenue > best.monthlyRevenue ? item : best, mix[0]).classCount
+    : null
+
+  // ── Candidatas a upgrade ───────────────────────────────────────────────────
+  // Agrupar historial por userId + classCount
+  const byUserAndCount = new Map<string, {
+    name: string
+    classCount: number
+    purchases: { activatedAt: Date | null; expiresAt: Date | null; classesTotal: number; price: number }[]
+  }>()
+
+  for (const p of allPurchases) {
+    const cc = p.package?.classCount
+    if (!cc || !p.package) continue
+    const key = `${p.userId}__${cc}`
+    if (!byUserAndCount.has(key)) {
+      byUserAndCount.set(key, { name: p.user.name, classCount: cc, purchases: [] })
+    }
+    byUserAndCount.get(key)!.purchases.push({
+      activatedAt: p.activatedAt,
+      expiresAt: p.expiresAt,
+      classesTotal: p.classesTotal,
+      price: p.package.price,
+    })
+  }
+
+  const classCountsSorted = availablePackages.map((p) => p.classCount).sort((a, b) => a - b)
+  const priceByCount = new Map(availablePackages.map((p) => [p.classCount, p.price / 100]))
+
+  const upgradeCandidates: UpgradeCandidate[] = []
+
+  for (const [key, data] of byUserAndCount.entries()) {
+    if (data.purchases.length < 2) continue  // necesita al menos 2 compras del mismo tipo
+
+    // Buscar el siguiente tier disponible
+    const nextCount = classCountsSorted.find((cc) => cc > data.classCount) ?? null
+    if (!nextCount) continue  // ya tiene el paquete más grande
+
+    // Calcular velocidad promedio de consumo (días en terminar el paquete)
+    const consumedPkgs = data.purchases.filter(
+      (p) => p.activatedAt && p.expiresAt && p.expiresAt < now,
+    )
+    let avgDaysToConsume: number | null = null
+    if (consumedPkgs.length > 0) {
+      const durations = consumedPkgs
+        .map((p) => {
+          if (!p.activatedAt || !p.expiresAt) return null
+          return Math.floor((p.expiresAt.getTime() - p.activatedAt.getTime()) / (24 * 60 * 60 * 1000))
+        })
+        .filter((d): d is number => d !== null)
+      avgDaysToConsume = durations.length > 0
+        ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+        : null
+    }
+
+    const userId = key.split('__')[0]
+    const pricePerClassNow = data.purchases[0].price / 100 / data.classCount
+    const pricePerClassNext = priceByCount.has(nextCount) ? priceByCount.get(nextCount)! / nextCount : null
+
+    upgradeCandidates.push({
+      userId,
+      name: data.name,
+      currentClassCount: data.classCount,
+      suggestedClassCount: nextCount,
+      renewalCount: data.purchases.length,
+      avgDaysToConsume,
+      pricePerClassNow: Math.round(pricePerClassNow),
+      pricePerClassNext: pricePerClassNext !== null ? Math.round(pricePerClassNext) : null,
+    })
+  }
+
+  // Ordenar por más renovaciones primero
+  upgradeCandidates.sort((a, b) => b.renewalCount - a.renewalCount)
+
+  // ── Alumnas que no van a terminar el paquete ───────────────────────────────
+  const in20Days = new Date(now.getTime() + 20 * 24 * 60 * 60 * 1000)
+  const slowConsumers: SlowConsumer[] = allPurchases
+    .filter((p) => {
+      if (!p.expiresAt || p.expiresAt < now || p.expiresAt > in20Days) return false
+      if (p.classesRemaining <= 0) return false
+      const pctRemaining = p.classesTotal > 0 ? p.classesRemaining / p.classesTotal : 0
+      return pctRemaining > 0.35  // tiene más del 35% sin usar con ≤20 días para vencer
+    })
+    .map((p) => ({
+      userId: p.userId,
+      name: p.user.name,
+      classCount: p.package?.classCount ?? 0,
+      classesRemaining: p.classesRemaining,
+      classesTotal: p.classesTotal,
+      daysUntilExpiry: Math.ceil((p.expiresAt!.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
+    }))
+
+  return { mix, totalActiveStudents, starProduct, upgradeCandidates, slowConsumers }
+}
+
 // ─── Dashboard completo ───────────────────────────────────────────────────────
 
 export async function getFinancialDashboard(studioId: string): Promise<FinancialDashboard> {
@@ -619,7 +830,7 @@ export async function getFinancialDashboard(studioId: string): Promise<Financial
   const month = ar.getMonth() + 1
   const year = ar.getFullYear()
 
-  const [breakEven, committedRevenue, revenueAtRisk, classMargin, ltv, cashFlow] =
+  const [breakEven, committedRevenue, revenueAtRisk, classMargin, ltv, cashFlow, packageAnalysis] =
     await Promise.all([
       getBreakEven(studioId, month, year),
       getCommittedRevenue(studioId),
@@ -627,7 +838,8 @@ export async function getFinancialDashboard(studioId: string): Promise<Financial
       getClassMargin(studioId, month, year),
       getLTVAndRenewal(studioId),
       getCashFlowProjection(studioId),
+      getPackageAnalysis(studioId),
     ])
 
-  return { breakEven, committedRevenue, revenueAtRisk, classMargin, ltv, cashFlow }
+  return { breakEven, committedRevenue, revenueAtRisk, classMargin, ltv, cashFlow, packageAnalysis }
 }

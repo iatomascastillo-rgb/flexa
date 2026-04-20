@@ -727,8 +727,9 @@ export async function getPackageAnalysis(studioId: string): Promise<PackageAnaly
     }))
     .sort((a, b) => a.classCount - b.classCount)
 
-  const starProduct = mix.length > 0
-    ? mix.reduce((best, item) => item.monthlyRevenue > best.monthlyRevenue ? item : best, mix[0]).classCount
+  const topByRevenue = mix.filter((m) => m.monthlyRevenue > 0)
+  const starProduct = topByRevenue.length > 0
+    ? topByRevenue.reduce((best, item) => item.monthlyRevenue > best.monthlyRevenue ? item : best).classCount
     : null
 
   // ── Candidatas a upgrade ───────────────────────────────────────────────────
@@ -762,9 +763,19 @@ export async function getPackageAnalysis(studioId: string): Promise<PackageAnaly
   for (const [key, data] of byUserAndCount.entries()) {
     if (data.purchases.length < 2) continue  // necesita al menos 2 compras del mismo tipo
 
-    // Buscar el siguiente tier disponible
-    const nextCount = classCountsSorted.find((cc) => cc > data.classCount) ?? null
-    if (!nextCount) continue  // ya tiene el paquete más grande
+    const pricePerClassNow = data.purchases[0].price / 100 / data.classCount
+
+    // Buscar el mejor tier superior: mayor classCount donde el precio/clase sea ≤ al actual
+    // (solo sugerir upgrade que tenga sentido económico para la alumna)
+    const bestNextCount = classCountsSorted
+      .filter((cc) => cc > data.classCount)
+      .find((cc) => {
+        const price = priceByCount.get(cc)
+        if (!price) return false
+        return price / cc <= pricePerClassNow * 1.05  // toleramos hasta 5% más caro/clase
+      }) ?? null
+
+    if (!bestNextCount) continue  // no hay paquete superior que valga la pena sugerir
 
     // Calcular velocidad promedio de consumo (días en terminar el paquete)
     const consumedPkgs = data.purchases.filter(
@@ -784,14 +795,13 @@ export async function getPackageAnalysis(studioId: string): Promise<PackageAnaly
     }
 
     const userId = key.split('__')[0]
-    const pricePerClassNow = data.purchases[0].price / 100 / data.classCount
-    const pricePerClassNext = priceByCount.has(nextCount) ? priceByCount.get(nextCount)! / nextCount : null
+    const pricePerClassNext = priceByCount.has(bestNextCount) ? priceByCount.get(bestNextCount)! / bestNextCount : null
 
     upgradeCandidates.push({
       userId,
       name: data.name,
       currentClassCount: data.classCount,
-      suggestedClassCount: nextCount,
+      suggestedClassCount: bestNextCount,
       renewalCount: data.purchases.length,
       avgDaysToConsume,
       pricePerClassNow: Math.round(pricePerClassNow),

@@ -114,7 +114,7 @@ function LoginForm() {
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              placeholder="centro-pilates (vacío si sos Super Admin)"
+              placeholder="centro-pilates"
               autoCapitalize="none"
               className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sage)]"
               style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}

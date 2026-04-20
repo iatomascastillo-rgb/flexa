@@ -39,7 +39,7 @@ function FloatingShape({ className = '', style = {}, delay = 0, duration = 12 }:
 export function HeroGeometric() {
   return (
     <section
-      className="relative overflow-hidden mx-auto max-w-5xl px-5 py-20 text-center md:py-28"
+      className="relative overflow-hidden mx-auto max-w-5xl px-5 py-10 text-center md:py-24"
       style={{ background: 'var(--cream)' }}
     >
       {/* Ambient background blobs */}

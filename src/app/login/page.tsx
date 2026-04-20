@@ -65,10 +65,11 @@ function LoginForm() {
     } else {
       try {
         localStorage.setItem('flexa_email', email.trim().toLowerCase())
-        localStorage.setItem('flexa_last_studio', safeSlug(slug.trim().toLowerCase()))
+        if (slug) localStorage.setItem('flexa_last_studio', safeSlug(slug.trim().toLowerCase()))
       } catch {}
       // Full page navigation so Vercel's serverless functions receive the new session cookie
-      window.location.href = callbackUrl !== '/' ? callbackUrl : `/${slug}`
+      const dest = callbackUrl !== '/' ? callbackUrl : slug ? `/${slug}` : '/superadmin'
+      window.location.href = dest
     }
   }
 
@@ -113,8 +114,7 @@ function LoginForm() {
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              required
-              placeholder="centro-pilates"
+              placeholder="centro-pilates (vacío si sos Super Admin)"
               autoCapitalize="none"
               className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sage)]"
               style={{ borderColor: '#E8E0D6', color: 'var(--ink)' }}

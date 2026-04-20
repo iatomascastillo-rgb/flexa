@@ -17,12 +17,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         studioSlug: { label: 'Studio Slug', type: 'text' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password || !credentials?.studioSlug) {
+        if (!credentials?.email || !credentials?.password) {
           return null
         }
 
+        const email = String(credentials.email).trim().toLowerCase()
+        const studioSlug = String(credentials.studioSlug ?? '').trim()
+
+        // SUPER_ADMIN: login sin estudio
+        if (!studioSlug) {
+          const superAdmin = await prisma.user.findFirst({
+            where: { email, role: 'SUPER_ADMIN' },
+            select: {
+              id: true, email: true, name: true, role: true, studioId: true,
+              passwordHash: true, active: true, loginAttempts: true, lockedUntil: true,
+            },
+          })
+          if (!superAdmin || !superAdmin.active) return null
+          const now = new Date()
+          if (superAdmin.lockedUntil && superAdmin.lockedUntil > now) return null
+          const valid = await bcrypt.compare(String(credentials.password), superAdmin.passwordHash)
+          if (!valid) return null
+          return { id: superAdmin.id, email: superAdmin.email, name: superAdmin.name, role: superAdmin.role, studioId: null }
+        }
+
         const studio = await prisma.studio.findUnique({
-          where: { slug: String(credentials.studioSlug), active: true },
+          where: { slug: studioSlug, active: true },
           select: { id: true },
         })
         if (!studio) return null
@@ -30,7 +50,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const user = await prisma.user.findUnique({
           where: {
             email_studioId: {
-              email: String(credentials.email),
+              email,
               studioId: studio.id,
             },
           },

@@ -42,7 +42,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const user = await prisma.user.create({
     data: {
       email: email.trim().toLowerCase(),
-      password: hashed,
+      passwordHash: hashed,
       name: typeof name === 'string' ? name.trim() : 'Super Admin',
       role: 'SUPER_ADMIN',
     },

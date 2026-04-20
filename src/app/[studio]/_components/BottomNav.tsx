@@ -77,6 +77,19 @@ function ClipboardIcon({ active }: { active: boolean }) {
   )
 }
 
+function AdminIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="18" x2="20" y2="18" />
+      <circle cx="8" cy="6" r="2" fill={active ? 'currentColor' : 'none'} />
+      <circle cx="16" cy="12" r="2" fill={active ? 'currentColor' : 'none'} />
+      <circle cx="10" cy="18" r="2" fill={active ? 'currentColor' : 'none'} />
+    </svg>
+  )
+}
+
 export function BottomNav({ studio, role, pendingCount = 0, navColor }: { studio: string; role: string; pendingCount?: number; navColor?: string }) {
   const pathname = usePathname()
 
@@ -148,7 +161,38 @@ export function BottomNav({ studio, role, pendingCount = 0, navColor }: { studio
     )
   }
 
-  // Alumnos y STUDIO_ADMIN
+  // STUDIO_ADMIN: mismo nav de alumno + acceso directo al panel admin
+  if (role === 'STUDIO_ADMIN') {
+    const adminLinks = [
+      { href: `/${studio}`, label: 'Inicio', icon: HomeIcon },
+      { href: `/${studio}/clases`, label: 'Clases', icon: CalendarIcon },
+      { href: `/${studio}/paquetes`, label: 'Paquetes', icon: ShoppingBagIcon },
+      { href: `/${studio}/admin`, label: 'Admin', icon: AdminIcon },
+      { href: `/${studio}/perfil`, label: 'Perfil', icon: UserIcon },
+    ]
+    return (
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D6]" style={{ background: navColor ?? '#F7F3EE' }}>
+        <div className="flex">
+          {adminLinks.map(({ href, label, icon: Icon }) => {
+            const isActive = pathname === href || (href.includes('/admin') && pathname.startsWith(href))
+            return (
+              <Link
+                key={href}
+                href={href}
+                className="flex flex-1 flex-col items-center gap-0.5 py-3 text-xs transition-colors"
+                style={{ color: isActive ? 'var(--sage)' : 'var(--stone)' }}
+              >
+                <Icon active={isActive} />
+                <span className={isActive ? 'font-medium' : ''}>{label}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+    )
+  }
+
+  // Alumnos
   const links = [
     { href: `/${studio}`, label: 'Inicio', icon: HomeIcon },
     { href: `/${studio}/clases`, label: 'Clases', icon: CalendarIcon },

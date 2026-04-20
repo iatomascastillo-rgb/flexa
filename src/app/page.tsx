@@ -145,7 +145,7 @@ export default function LandingPage() {
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3">
           <div className="flex items-center">
-            <AnimatedLogo height={54} />
+            <AnimatedLogo height={68} />
           </div>
           <nav className="flex items-center gap-1">
             {/* Links de sección — solo desktop */}

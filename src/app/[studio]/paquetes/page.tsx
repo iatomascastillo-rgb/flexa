@@ -65,7 +65,13 @@ export default async function PaquetesPage({
     prisma.userPackage.findMany({
       where: { userId, studioId, paymentStatus: 'APPROVED', classesRemaining: { gt: 0 } },
       orderBy: { expiresAt: 'asc' },
-      select: { classesRemaining: true },
+      select: {
+        classesRemaining: true,
+        classesTotal: true,
+        expiresAt: true,
+        activatedAt: true,
+        package: { select: { name: true } },
+      },
     }),
   ])
 
@@ -216,6 +222,49 @@ export default async function PaquetesPage({
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Mis paquetes activos */}
+      {creditPackages.length > 0 && (
+        <div className="mt-8">
+          <p className="mb-3 px-1 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--stone)' }}>
+            Mis paquetes activos
+          </p>
+          <div className="space-y-2">
+            {creditPackages.map((pkg, i) => {
+              const daysLeft = Math.ceil((new Date(pkg.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+              const expLabel = new Date(pkg.expiresAt).toLocaleDateString('es-AR', {
+                day: 'numeric', month: 'long', timeZone: 'America/Argentina/Buenos_Aires',
+              })
+              const isUrgent = daysLeft <= 7
+              return (
+                <div
+                  key={i}
+                  className="flex items-center justify-between rounded-2xl px-4 py-3"
+                  style={{ background: 'white', border: `1px solid ${isUrgent ? '#FDE047' : '#E8E0D6'}` }}
+                >
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
+                      {pkg.package?.name ?? `${pkg.classesTotal} clases`}
+                    </p>
+                    <p className="text-xs" style={{ color: isUrgent ? '#92400E' : 'var(--stone)' }}>
+                      Vence el {expLabel}
+                      {isUrgent && ` · ¡quedan ${daysLeft} día${daysLeft !== 1 ? 's' : ''}!`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-semibold" style={{ color: 'var(--ink)' }}>
+                      {pkg.classesRemaining}
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--stone)' }}>
+                      {pkg.classesRemaining === 1 ? 'clase' : 'clases'}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

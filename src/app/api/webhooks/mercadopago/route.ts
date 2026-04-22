@@ -309,12 +309,25 @@ async function activatePackage({
     }
 
     // ── 1. Activar paquete ────────────────────────────────────────────────
+    // Recalcular expiresAt desde la fecha de activación real:
+    // Si quedan < 15 días en el mes actual → vence fin del MES QUE VIENE
+    // Si quedan ≥ 15 días → vence fin del mes actual
+    // Garantiza mínimo ~15 días siempre.
+    const arNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }))
+    const daysLeftInMonth = new Date(arNow.getFullYear(), arNow.getMonth() + 1, 0).getDate() - arNow.getDate()
+    const expiryMonth = daysLeftInMonth < 15 ? arNow.getMonth() + 1 : arNow.getMonth()
+    const expiryYear  = expiryMonth > 11 ? arNow.getFullYear() + 1 : arNow.getFullYear()
+    const normalizedMonth = expiryMonth > 11 ? 0 : expiryMonth
+    // Último momento del mes en Argentina = 1ro del mes siguiente a las 02:59:59 UTC
+    const newExpiresAt = new Date(Date.UTC(expiryYear, normalizedMonth + 1, 1, 2, 59, 59, 999))
+
     await tx.userPackage.update({
       where: { id: userPackageId },
       data: {
         paymentStatus: 'APPROVED',
         activatedAt: now,
         paymentId: mpPaymentId,
+        expiresAt: newExpiresAt,
         // classesRemaining se calcula al final (paso 6)
       },
     })

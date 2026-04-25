@@ -134,7 +134,7 @@ export default function LandingPage() {
       <div className="w-full py-2.5 px-5 text-center text-sm" style={{ background: 'var(--ink)', color: 'white' }}>
         <span>🚀 <strong>¡LANZAMIENTO FLEXA!</strong> 50% OFF en el plan anual (Miembros Fundadores).{' '}</span>
         <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: 'rgba(139,92,246,0.25)', color: '#8B5CF6', border: '1px solid rgba(139,92,246,0.4)' }}>
-          ÚLTIMOS 10 CUPOS
+          ÚLTIMOS 2 CUPOS
         </span>
       </div>
 
@@ -145,7 +145,7 @@ export default function LandingPage() {
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3">
           <div className="flex items-center">
-            <AnimatedLogo height={68} />
+            <AnimatedLogo height={48} withText />
           </div>
           <nav className="flex items-center gap-1">
             {/* Links de sección — solo desktop */}
